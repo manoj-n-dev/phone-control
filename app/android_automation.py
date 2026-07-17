@@ -3,11 +3,11 @@ import time
 import os
 import re
 import urllib.parse
-from ppadb.client import Client as AdbClient  # type: ignore
+import base64
+import xml.etree.ElementTree as ET
+from ppadb.client import Client as AdbClient  
 
-# --- COMPREHENSIVE STATIC APPLICATION DICTIONARY (FALLBACK INTERFACES) ---
 APP_PACKAGES = {
-    # --- SOCIAL MEDIA & CHAT ---
     "whatsapp": "com.whatsapp",
     "whatsapp business": "com.whatsapp.w4b",
     "instagram": "com.instagram.android",
@@ -25,7 +25,6 @@ APP_PACKAGES = {
     "linkedin": "com.linkedin.android",
     "signal": "org.thoughtcrime.securesms",
 
-    # --- MUSIC & AUDIO ECOSYSTEM ---
     "spotify": "com.spotify.music",
     "youtube music": "com.google.android.apps.youtube.music",
     "yt music": "com.google.android.apps.youtube.music",
@@ -39,7 +38,6 @@ APP_PACKAGES = {
     "soundcloud": "com.soundcloud.android",
     "shazam": "com.shazam.android",
 
-    # --- GOOGLE ECOSYSTEM ---
     "youtube": "com.google.android.youtube",
     "chrome": "com.android.chrome",
     "gmail": "com.google.android.gm",
@@ -56,14 +54,12 @@ APP_PACKAGES = {
     "files": "com.google.android.apps.nbu.files",
     "gemini": "com.google.android.apps.googleassistant",
 
-    # --- VIDEO STREAMING ---
     "netflix": "com.netflix.mediaclient",
     "prime video": "com.amazon.avod.thirdpartyclient",
     "disney": "com.disney.disneyplus",
     "hotstar": "in.startv.hotstar",
     "twitch": "tv.twitch.android",
 
-    # --- PRODUCTIVITY & UTILITY ---
     "chatgpt": "com.openai.chatgpt",
     "microsoft teams": "com.microsoft.teams",
     "zoom": "us.zoom.videomeetings",
@@ -74,7 +70,6 @@ APP_PACKAGES = {
     "dropbox": "com.dropbox.android",
     "duolingo": "com.duolingo",
 
-    # --- SHOPPING & FOOD ---
     "amazon": "com.amazon.mShop.android.shopping",
     "temu": "com.einnovation.temu",
     "shein": "com.zzkko",
@@ -82,7 +77,6 @@ APP_PACKAGES = {
     "mcdonalds": "com.mcdonalds.mobileapp",
     "flipkart": "com.flipkart.android",
 
-    # --- CORE SYSTEM APPS ---
     "settings": "com.android.settings",
     "camera": "com.android.camera",
     "gallery": "com.android.gallery3d",
@@ -92,13 +86,52 @@ APP_PACKAGES = {
     "contacts": "com.google.android.contacts",
     "play store": "com.android.vending",
 
-    # --- POPULAR GAMES ---
     "roblox": "com.roblox.client",
     "subway surfers": "com.kiloo.subwaysurf",
     "candy crush": "com.king.candycrushsaga",
     "pubg": "com.tencent.ig",
     "free fire": "com.dts.freefireth"
 }
+
+def clean_package_name(package):
+    """Translates package IDs (e.g. com.whatsapp) into clean human-readable app names."""
+    rev_map = {pkg: name.title() for name, pkg in APP_PACKAGES.items()}
+    if package in rev_map:
+        return rev_map[package]
+    
+    overrides = {
+        "com.android.settings": "Settings",
+        "com.android.camera": "Camera",
+        "com.android.gallery3d": "Gallery",
+        "com.google.android.dialer": "Phone",
+        "com.google.android.contacts": "Contacts",
+        "com.android.vending": "Play Store",
+        "com.google.android.apps.messaging": "Messages",
+        "com.google.android.calculator": "Calculator",
+        "com.google.android.deskclock": "Clock",
+        "com.android.chrome": "Chrome",
+        "com.google.android.gm": "Gmail",
+        "com.google.android.apps.maps": "Maps",
+        "com.google.android.apps.photos": "Photos",
+        "com.google.android.youtube": "YouTube",
+    }
+    if package in overrides:
+        return overrides[package]
+        
+    parts = package.split('.')
+    if not parts:
+        return package
+        
+    name_part = parts[-1]
+    generic = {'android', 'app', 'client', 'mobile', 'messenger', 'service', 'free', 'lite', 'player'}
+    if name_part.lower() in generic and len(parts) > 2:
+        name_part = parts[-2]
+        
+    name_part = re.sub(r'(?<!^)(?=[A-Z])', ' ', name_part)
+    name_part = name_part.replace('_', ' ').replace('-', ' ')
+    
+    words = [w.capitalize() for w in name_part.split()]
+    return ' '.join(words)
 
 def connect_to_phone():
     """Initializes the ADB client connection securely."""
@@ -117,7 +150,6 @@ def connect_to_phone():
     print(f" Connected directly to device: {devices[0].serial}")
     return devices[0]
 
-# --- 1. POWER & ACCESS FUNCTIONS ---
 def is_screen_on(device):
     """Parses system power state to determine if device display panel is active."""
     power_state = device.shell("dumpsys power | grep mWakefulness=")
@@ -127,10 +159,10 @@ def toggle_screen(device, action):
     """Intelligently changes screen state based on current device reality."""
     screen_active = is_screen_on(device)
     if action == "off" and screen_active:
-        device.shell("input keyevent 26")  # Hardware Power Key
+        device.shell("input keyevent 26")  
         print(" Screen suspended.")
     elif action == "on" and not screen_active:
-        device.shell("input keyevent 224") # Dedicated Safe Wake Key
+        device.shell("input keyevent 224") 
         print(" Screen awakened.")
     elif action == "on" and screen_active:
         print(" Screen is already powered on.")
@@ -141,7 +173,7 @@ def unlock_with_pin(device, pin_code=None):
     """Flashes keyguard layout and feeds numerical pin patterns into input interface."""
     toggle_screen(device, "on")
     time.sleep(0.4)
-    device.shell("input keyevent 82") # Show keyguard pad matrix
+    device.shell("input keyevent 82") 
     time.sleep(0.4)
     
     if not pin_code:
@@ -152,8 +184,70 @@ def unlock_with_pin(device, pin_code=None):
     if user_pin:
         device.shell(f"input text {user_pin}")
         time.sleep(0.3)
-        device.shell("input keyevent 66") # Return/Enter verification key
+        device.shell("input keyevent 66") 
         print(" Unlock pattern transmission completed.")
+
+def unlock_with_pattern(device, pattern_sequence):
+    """Simulates a continuous swipe sequence for pattern unlock using monkey scripting."""
+    if not pattern_sequence:
+        return
+    print(f" Simulating Pattern Unlock: {pattern_sequence}")
+    if not is_screen_on(device):
+        device.shell("input keyevent 224")
+        time.sleep(0.5)
+    
+    device.shell("input swipe 500 1500 500 500 300")
+    time.sleep(0.6)
+    
+    size_str = device.shell("wm size")
+    width, height = 1080, 2400  
+    match = re.search(r'(\d+)x(\d+)', size_str)
+    if match:
+        width = int(match.group(1))
+        height = int(match.group(2))
+        
+    x_start = width * 0.18
+    x_end = width * 0.82
+    y_start = height * 0.58
+    y_end = height * 0.85
+    
+    dots = {}
+    for i in range(9):
+        row = i // 3
+        col = i % 3
+        cx = x_start + col * (x_end - x_start) / 2
+        cy = y_start + row * (y_end - y_start) / 2
+        dots[i+1] = (cx, cy)
+        
+    script_lines = [
+        "type= user",
+        "count= 1",
+        "speed= 1.0",
+        "start data >>"
+    ]
+    
+    now = int(time.time() * 1000)
+    first_dot = int(pattern_sequence[0])
+    fx, fy = dots[first_dot]
+    script_lines.append(f"DispatchPointer({now}, {now}, 0, {fx}, {fy}, 0, 0, 0, 0, 0, 0, 0)")
+    
+    for idx, dot in enumerate(pattern_sequence[1:]):
+        curr_time = now + 80 * (idx + 1)
+        cx, cy = dots[int(dot)]
+        script_lines.append(f"DispatchPointer({now}, {curr_time}, 2, {cx}, {cy}, 0, 0, 0, 0, 0, 0, 0)")
+        
+    last_dot = int(pattern_sequence[-1])
+    lx, ly = dots[last_dot]
+    end_time = now + 80 * len(pattern_sequence) + 20
+    script_lines.append(f"DispatchPointer({now}, {end_time}, 1, {lx}, {ly}, 0, 0, 0, 0, 0, 0, 0)")
+    
+    script_content = "\n".join(script_lines) + "\n"
+    
+    b64_script = base64.b64encode(script_content.encode('utf-8')).decode('utf-8')
+    device.shell(f"echo {b64_script} | base64 -d > /data/local/tmp/pattern.script")
+    device.shell("monkey -f /data/local/tmp/pattern.script 1")
+    device.shell("rm /data/local/tmp/pattern.script")
+    print(" Unlock pattern transmission completed.")
 
 def reboot_device(device, mode="standard"):
     """Forces physical boot modifications via hardware pipeline parameters."""
@@ -165,7 +259,6 @@ def reboot_device(device, mode="standard"):
     else:
         device.shell("reboot")
 
-# --- 2. HARDWARE NAVIGATION & GESTURES ---
 def simulate_key(device, key_name):
     """Maps dynamic system keywords directly to explicit hardware response codes."""
     keys = {
@@ -206,7 +299,6 @@ def swipe_gesture(device, direction, exact_coords=None):
     else:
         print(f" Directional parsing parameters for gesture translation failed.")
 
-# --- 3. AUDIO & MEDIA ACTIONS ---
 def control_media(device, action):
     """Feeds explicit media layout pipeline keys directly to active OS listener."""
     media_events = {
@@ -220,7 +312,6 @@ def control_media(device, action):
     else:
         print(f" Media instruction profile unmapped.")
 
-# --- 4. DATA & UTILITY INJECTIONS ---
 def type_text(device, text):
     """Escapes operating shell whitespace parameters to stream text structures directly."""
     escaped_text = text.replace(" ", "%s").replace("'", "").replace('"', "")
@@ -235,7 +326,6 @@ def take_screenshot(device):
     device.shell("rm /sdcard/runtime_capture.png")
     print(f" Screen Captured! Frame exported to directory: {os.path.abspath(filename)}")
 
-# --- 5. SYSTEM DIAGNOSTICS & MANAGEMENT ---
 def show_battery_diagnostics(device):
     """Dumps real-time electrical telemetry matrices from hardware charging modules."""
     info = device.shell("dumpsys battery")
@@ -253,19 +343,18 @@ def clear_all_background_apps(device):
 def clear_recent_apps(device):
     """Clears all recently used apps using app switch key."""
     print(" Clearing recent apps via UI...")
-    device.shell("input keyevent 187") # KEYCODE_APP_SWITCH
+    device.shell("input keyevent 187") 
     time.sleep(1.0)
     for _ in range(5):
         device.shell("input swipe 500 1000 500 100 300")
         time.sleep(0.3)
-    device.shell("input keyevent 3") # Home
+    device.shell("input keyevent 3") 
     print(" Recent apps cleared.")
 
 def live_discover_package(device, app_hint):
     """Dynamically queries the live connected device to discover match package footprints on the fly."""
     hint = app_hint.lower().strip()
     
-    # Simple semantic overrides
     if hint in ["insta", "ig"]: hint = "instagram"
     if hint in ["fb"]: hint = "facebook"
     if hint in ["wa"]: hint = "whatsapp"
@@ -299,7 +388,6 @@ def launch_app_safely(device, app_name):
     resolve_cmd = f"cmd package resolve-activity --brief {package}"
     output = device.shell(resolve_cmd).strip()
     if "No activity found" in output or not output or "Error" in output:
-        # Fallback to general system monkey engine launcher
         device.shell(f"monkey -p {package} -c android.intent.category.LAUNCHER 1")
         return
     component = output.split('\n')[-1].strip()
@@ -315,7 +403,6 @@ def close_app_safely(device, app_name):
     else:
         print(f" System mapping signature for target '{app_name}' not discovered.")
 
-# --- 6. TARGETED CROSS-PLATFORM DEEP-SEARCH ENGINES ---
 def search_in_chrome(device, query):
     """Dynamically forces Chrome open straight into a Google search query layout via intent routing."""
     print(f" [CHROME PLATFORM] Compiling web query layout for target: '{query}'")
@@ -330,7 +417,6 @@ def search_in_whatsapp(device, query):
     device.shell("am start -n com.whatsapp/com.whatsapp.HomeActivity")
     time.sleep(2.0)
     
-    # Default top right action layout tap for magnifying glass search. Adjust if device layout deviates.
     print(" Striking screen interaction vectors [WhatsApp Top Bar Search Focus Point]")
     device.shell("input tap 880 150")
     time.sleep(1.0)
@@ -346,10 +432,9 @@ def search_in_instagram(device, query):
     device.shell(f"am start -a android.intent.action.VIEW -d '{deep_link}' com.instagram.android")
     time.sleep(2.5)
     
-    # UI Layout Fallback Sequence if account privacy breaks direct deep link loading
-    device.shell("input tap 250 2200") # Select bottom search loop icon index
+    device.shell("input tap 250 2200") 
     time.sleep(1.0)
-    device.shell("input tap 500 140")  # Focus top query structural bar array
+    device.shell("input tap 500 140")  
     time.sleep(1.0)
     type_text(device, query)
     simulate_key(device, "enter")
@@ -363,8 +448,7 @@ def search_in_facebook(device, query):
     device.shell(f"am start -a android.intent.action.VIEW -d '{deep_link}' com.facebook.katana")
     time.sleep(2.5)
     
-    # Manual touch adjustment verification pattern
-    device.shell("input tap 900 130") # Strike upper right application tool strip glass search icon
+    device.shell("input tap 900 130") 
     time.sleep(1.0)
     type_text(device, query)
     simulate_key(device, "enter")
@@ -402,7 +486,6 @@ def execute_universal_cross_search(device, target_app_hint, search_query):
     elif "chrome" in target or "google" in target or "web" in target:
         search_in_chrome(device, search_query)
     else:
-        # Dynamic discovery query fallback strategy if application targets are specified but unmapped
         print(f" Target platform ambiguous ({target_app_hint}). Launching Dynamic Device Discovery Strategy...")
         launch_app_safely(device, target)
         time.sleep(2.0)
@@ -410,18 +493,15 @@ def execute_universal_cross_search(device, target_app_hint, search_query):
         type_text(device, search_query)
         simulate_key(device, "enter")
 
-# --- 7. CALLING FUNCTIONS ---
 def make_call(device, phone_number):
     """Initiates a phone call to the specified number using system dialer intent."""
     print(f" Initiating call to: {phone_number}")
-    # Remove any non-digit characters except +
     clean_number = re.sub(r'[^\d+]', '', phone_number)
     
     if not clean_number:
         print(" Invalid phone number format.")
         return
     
-    # Use tel: URI scheme to initiate call
     device.shell(f"am start -a android.intent.action.CALL -d tel:{clean_number}")
     print(f" Call initiated to {clean_number}")
     time.sleep(2.0)
@@ -429,19 +509,15 @@ def make_call(device, phone_number):
 def call_contact(device, contact_name):
     """Searches for a contact in the dialer and initiates a call."""
     print(f" Searching for contact: {contact_name}")
-    # Open dialer
     device.shell("am start -a android.intent.action.DIAL")
     time.sleep(2.0)
     
-    # Tap search bar (coordinates may vary by device)
     device.shell("input tap 500 200")
     time.sleep(1.0)
     
-    # Type contact name
     type_text(device, contact_name)
     time.sleep(1.5)
     
-    # Simulate call key to initiate call
     simulate_key(device, "call")
     print(f" Attempting to call contact: {contact_name}")
 
@@ -464,64 +540,74 @@ def reject_call(device):
     time.sleep(1.0)
 
 def control_active_call(device, action):
-    """Controls an active call (Speaker, Mute)."""
-    print(f" Call Control: {action}")
+    """Controls an active call (Speaker, Mute, Record, Hold) by finding the UI elements dynamically."""
+    print(f" Call Control Action Requested: {action}")
+    
+    coords = None
     if action == "speaker":
-        # Usually handled by in-call UI, try tapping standard location
-        device.shell("input tap 800 500") 
+        coords = find_ui_element_coords(device, search_text="speaker") or \
+                 find_ui_element_coords(device, content_desc="speaker") or \
+                 find_ui_element_coords(device, content_desc="speakerphone")
     elif action == "mute":
-        # Try mute keyevent (227) or standard tap
-        device.shell("input keyevent 227")
-        device.shell("input tap 200 500")
+        coords = find_ui_element_coords(device, search_text="mute") or \
+                 find_ui_element_coords(device, content_desc="mute")
+        if not coords:
+            device.shell("input keyevent 227")
     elif action == "record":
-        device.shell("input tap 500 800")
+        coords = find_ui_element_coords(device, search_text="record") or \
+                 find_ui_element_coords(device, content_desc="record")
     elif action == "hold":
-        device.shell("input tap 800 800")
-    print(f" Call action '{action}' executed.")
+        coords = find_ui_element_coords(device, search_text="hold") or \
+                 find_ui_element_coords(device, content_desc="hold")
+                 
+    if coords:
+        device.shell(f"input tap {coords[0]} {coords[1]}")
+        print(f" Call action '{action}' executed via UI click at {coords}")
+    else:
+        fallbacks = {
+            "speaker": (800, 500),
+            "mute": (200, 500),
+            "record": (500, 800),
+            "hold": (800, 800)
+        }
+        fallback_coords = fallbacks.get(action)
+        if fallback_coords:
+            device.shell(f"input tap {fallback_coords[0]} {fallback_coords[1]}")
+            print(f" Call action '{action}' executed via fallback tap at {fallback_coords}")
 
 def make_whatsapp_call(device, phone_number, call_type="voice"):
     """Makes a WhatsApp voice or video call."""
     clean_number = re.sub(r'[^\d+]', '', phone_number)
     print(f" Initiating WhatsApp {call_type} call to {clean_number}")
-    # Start WhatsApp on the contact
     device.shell(f"am start -a android.intent.action.VIEW -d 'whatsapp://send?phone={clean_number}'")
     time.sleep(2.0)
     if call_type == "video":
-        # Video call icon is typically top right
         device.shell("input tap 750 150")
     else:
-        # Voice call icon is typically top right
         device.shell("input tap 900 150")
 
-# --- 8. SIMULTANEOUS MUSIC PLAYBACK FUNCTIONS ---
 def play_music_and_call(device, phone_number, music_app="spotify", search_query=None):
     """Opens music app, starts playback, then initiates a call simultaneously."""
     print(f" Starting simultaneous music playback and call sequence...")
     
-    # Step 1: Launch music app
     print(f" Launching {music_app}...")
     launch_app_safely(device, music_app)
     time.sleep(3.0)
     
-    # Step 2: Start music playback
     if search_query:
         print(f" Searching for: {search_query}")
-        # Tap search bar (coordinates may vary)
         device.shell("input tap 500 150")
         time.sleep(1.0)
         type_text(device, search_query)
         simulate_key(device, "enter")
         time.sleep(2.0)
     
-    # Start playback
     control_media(device, "play")
     time.sleep(1.0)
     
-    # Step 3: Go back to home
     simulate_key(device, "home")
     time.sleep(1.0)
     
-    # Step 4: Initiate call (music will continue in background)
     print(f" Initiating call while music plays...")
     make_call(device, phone_number)
     
@@ -552,16 +638,13 @@ def play_specific_song(device, song_name, music_app="spotify"):
     launch_app_safely(device, music_app)
     time.sleep(3.0)
     
-    # Tap search
     device.shell("input tap 500 150")
     time.sleep(1.0)
     
-    # Type song name
     type_text(device, song_name)
     simulate_key(device, "enter")
     time.sleep(2.0)
     
-    # Tap first result (coordinates may vary)
     device.shell("input tap 500 500")
     time.sleep(1.0)
     
@@ -578,32 +661,27 @@ def create_playlist_and_play(device, playlist_name, songs, music_app="spotify"):
     for i, song in enumerate(songs):
         print(f" Adding song {i+1}/{len(songs)}: {song}")
         
-        # Search for song
         device.shell("input tap 500 150")
         time.sleep(1.0)
         type_text(device, song)
         simulate_key(device, "enter")
         time.sleep(2.0)
         
-        # Play song
         device.shell("input tap 500 500")
         time.sleep(1.0)
         control_media(device, "play")
         time.sleep(3.0)
         
-        # Add to queue/playlist (coordinates may vary)
         device.shell("input tap 900 1800")
         time.sleep(1.0)
         device.shell("input tap 500 1000")
         time.sleep(1.0)
         
-        # Go back to search for next song
         simulate_key(device, "back")
         time.sleep(1.0)
     
     print(f" Playlist '{playlist_name}' created and playing!")
 
-# --- 9. SMS/MESSAGING FUNCTIONS ---
 def send_sms(device, phone_number, message):
     """Sends an SMS message to the specified number."""
     print(f" Sending SMS to {phone_number}: {message}")
@@ -612,13 +690,11 @@ def send_sms(device, phone_number, message):
         print(" Invalid phone number format.")
         return
     
-    # Open messaging app with SMS intent
     device.shell(f"am start -a android.intent.action.SENDTO -d sms:{clean_number} --es android.intent.extra.TEXT '{message}'")
     time.sleep(2.0)
-    # Attempt to auto-send
     device.shell("input keyevent 22")
     device.shell("input keyevent 66")
-    device.shell("input tap 950 1450") # common send button coords
+    device.shell("input tap 950 1450") 
     print(" SMS composed and sent.")
 
 def send_whatsapp_message(device, phone_number, message):
@@ -629,19 +705,16 @@ def send_whatsapp_message(device, phone_number, message):
         print(" Invalid phone number format.")
         return
     
-    # Use WhatsApp scheme
     device.shell(f"am start -a android.intent.action.SENDTO -d 'whatsapp://send?phone={clean_number}' --es android.intent.extra.TEXT '{message}'")
     time.sleep(2.0)
-    # Attempt to auto-send
     device.shell("input keyevent 22")
     device.shell("input keyevent 66")
-    device.shell("input tap 950 1450") # common send button coords
+    device.shell("input tap 950 1450") 
     print(" WhatsApp message composed and sent.")
 
 def read_last_sms(device):
     """Reads the last received SMS message."""
     print(" Reading last SMS...")
-    # Query SMS content provider
     result = device.shell(r"content query --uri content://sms/inbox --projection address:body:date --sort date\ DESC --limit 1")
     print(" Last SMS:")
     print(result)
@@ -658,11 +731,9 @@ def send_email(device, recipient, subject, body):
     print(f" Composing email to {recipient}")
     device.shell(f"am start -a android.intent.action.SENDTO -d 'mailto:{recipient}' --es android.intent.extra_SUBJECT '{subject}' --es android.intent.extra_TEXT '{body}'")
     time.sleep(2.0)
-    # Tap common send button (top right for Gmail)
     device.shell("input tap 900 150")
     print(" Email composed and sent.")
 
-# --- 10. FILE MANAGEMENT FUNCTIONS ---
 def list_files(device, path="/sdcard"):
     """Lists files in the specified directory."""
     print(f" Listing files in: {path}")
@@ -711,7 +782,6 @@ def get_file_info(device, filepath):
     result = device.shell(f"stat {filepath}")
     print(result)
 
-# --- 11. SYSTEM SETTINGS CONTROL ---
 def toggle_wifi(device, action):
     """Toggles WiFi on/off."""
     print(f" WiFi: {action}")
@@ -723,12 +793,14 @@ def toggle_wifi(device, action):
         print(" WiFi disabled.")
 
 def toggle_bluetooth(device, action):
-    """Toggles Bluetooth on/off."""
+    """Toggles Bluetooth on/off using cmd bluetooth_manager."""
     print(f" Bluetooth: {action}")
     if action.lower() in ["on", "enable", "start"]:
+        device.shell("cmd bluetooth_manager enable")
         device.shell("service call bluetooth_manager 6")
         print(" Bluetooth enabled.")
     elif action.lower() in ["off", "disable", "stop"]:
+        device.shell("cmd bluetooth_manager disable")
         device.shell("service call bluetooth_manager 8")
         print(" Bluetooth disabled.")
 
@@ -748,11 +820,11 @@ def set_brightness(device, level):
     """Sets screen brightness (0-255)."""
     print(f" Setting brightness to: {level}")
     device.shell(f"settings put system screen_brightness {level}")
-    device.shell("settings put system screen_brightness_mode 0")  # Manual mode
+    device.shell("settings put system screen_brightness_mode 0")  
     print(f" Brightness set to {level}.")
 
 def set_volume(device, stream, level):
-    """Sets volume level (0-15) for specific stream."""
+    """Sets volume level (0-15) for specific stream using media volume."""
     streams = {
         "music": 3,
         "ring": 2,
@@ -763,7 +835,7 @@ def set_volume(device, stream, level):
     }
     stream_code = streams.get(stream.lower(), 3)
     print(f" Setting {stream} volume to: {level}")
-    device.shell(f"service call audio 3 i32 {stream_code} i32 {level}")
+    device.shell(f"media volume --stream {stream_code} --set {level}")
     print(f" {stream} volume set to {level}.")
 
 def toggle_do_not_disturb(device, action):
@@ -786,21 +858,82 @@ def set_mobile_data(device, action):
         device.shell("svc data disable")
         print(" Mobile data disabled.")
 
-def toggle_flashlight(device, action):
-    """Toggles flashlight on/off."""
-    print(f" Flashlight: {action}")
-    if action.lower() in ["on", "enable"]:
-        device.shell("am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER com.google.android.apps.tachyon")
-        time.sleep(1.0)
-        device.shell("input tap 500 1000")  # Tap to turn on (coordinates may vary)
-        print(" Flashlight enabled.")
-    elif action.lower() in ["off", "disable"]:
-        device.shell("input tap 500 1000")  # Tap to turn off
-        time.sleep(0.5)
-        simulate_key(device, "back")
-        print(" Flashlight disabled.")
+def find_ui_element_coords(device, search_text=None, resource_id=None, content_desc=None):
+    """Dumps screen UI XML, searches for a node matching criteria, and returns (x, y) center coordinates."""
+    device.shell("uiautomator dump /data/local/tmp/uidump.xml")
+    temp_xml = os.path.join(os.path.dirname(os.path.abspath(__file__)), "temp_uidump.xml")
+    try:
+        device.pull("/data/local/tmp/uidump.xml", temp_xml)
+        device.shell("rm /data/local/tmp/uidump.xml")
+    except Exception as e:
+        print(f"Error pulling UI dump: {e}")
+        return None
 
-# --- 12. NOTIFICATION MANAGEMENT ---
+    if not os.path.exists(temp_xml):
+        return None
+
+    try:
+        tree = ET.parse(temp_xml)
+        root = tree.getroot()
+    except Exception as e:
+        print(f"Error parsing UI XML: {e}")
+        if os.path.exists(temp_xml):
+            os.remove(temp_xml)
+        return None
+
+    target_node = None
+    for node in root.iter('node'):
+        text = node.get('text', '')
+        r_id = node.get('resource-id', '')
+        desc = node.get('content-desc', '')
+
+        match = False
+        if search_text and search_text.lower() in text.lower():
+            match = True
+        if resource_id and resource_id in r_id:
+            match = True
+        if content_desc and content_desc.lower() in desc.lower():
+            match = True
+
+        if match:
+            target_node = node
+            break
+
+    if os.path.exists(temp_xml):
+        os.remove(temp_xml)
+
+    if target_node is not None:
+        bounds = target_node.get('bounds', '')
+        m = re.match(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]', bounds)
+        if m:
+            left, top, right, bottom = map(int, m.groups())
+            cx = (left + right) // 2
+            cy = (top + bottom) // 2
+            return cx, cy
+
+    return None
+
+def toggle_flashlight(device, action):
+    """Toggles flashlight on/off dynamically via Settings or UI automation."""
+    print(f" Flashlight: {action}")
+    
+    val = "1" if action.lower() in ["on", "enable"] else "0"
+    device.shell(f"settings put system flashlight_enabled {val}")
+    
+    device.shell("cmd statusbar expand-settings")
+    time.sleep(0.8)
+    
+    coords = find_ui_element_coords(device, search_text="flashlight") or find_ui_element_coords(device, search_text="torch")
+    if coords:
+        device.shell(f"input tap {coords[0]} {coords[1]}")
+        print(f" Flashlight toggled via UI click at {coords}.")
+    else:
+        device.shell("input tap 500 400")
+        print(" Flashlight toggled via fallback coordinate tap.")
+        
+    time.sleep(0.3)
+    device.shell("cmd statusbar collapse")
+
 def list_notifications(device):
     """Lists all current notifications."""
     print(" Listing notifications...")
@@ -819,17 +952,15 @@ def dismiss_notification(device, package):
     device.shell(f"dumpsys notification | grep {package}")
     print(f" Notifications from {package} identified.")
 
-# --- 13. CAMERA FUNCTIONS ---
 def take_photo(device, camera="back"):
     """Takes a photo using the specified camera."""
     print(f" Taking photo with {camera} camera...")
     launch_app_safely(device, "camera")
     time.sleep(3.0)
     
-    # Tap to focus and capture (coordinates may vary)
     device.shell("input tap 500 1000")
     time.sleep(0.5)
-    device.shell("input keyevent 27")  # Camera capture key
+    device.shell("input keyevent 27")  
     time.sleep(1.0)
     print(" Photo captured.")
 
@@ -839,11 +970,9 @@ def start_video_recording(device):
     launch_app_safely(device, "camera")
     time.sleep(3.0)
     
-    # Switch to video mode (coordinates may vary)
     device.shell("input tap 900 1800")
     time.sleep(1.0)
     
-    # Start recording
     device.shell("input tap 500 1500")
     time.sleep(1.0)
     print(" Video recording started.")
@@ -851,7 +980,7 @@ def start_video_recording(device):
 def stop_video_recording(device):
     """Stops video recording."""
     print(" Stopping video recording...")
-    device.shell("input tap 500 1500")  # Stop button (coordinates may vary)
+    device.shell("input tap 500 1500")  
     time.sleep(1.0)
     print(" Video recording stopped.")
 
@@ -861,12 +990,10 @@ def toggle_camera_flash(device, mode):
     launch_app_safely(device, "camera")
     time.sleep(3.0)
     
-    # Tap flash icon (coordinates may vary)
     device.shell("input tap 100 500")
     time.sleep(0.5)
     print(f" Flash set to {mode}.")
 
-# --- 14. ADVANCED GESTURES ---
 def long_press(device, x, y, duration=2000):
     """Performs a long press at specified coordinates."""
     print(f" Long pressing at X={x}, Y={y} for {duration}ms")
@@ -885,13 +1012,11 @@ def pinch_zoom(device, direction="in"):
     """Performs pinch zoom gesture."""
     print(f" Pinch zoom: {direction}")
     if direction == "in":
-        # Pinch in (zoom out)
         device.shell("input multitouch 0 500 800 500 800")
         device.shell("input multitouch 1 300 600 700 1000")
         device.shell("input multitouch sync")
         device.shell("input multitouch end")
     else:
-        # Pinch out (zoom in)
         device.shell("input multitouch 0 300 600 300 600")
         device.shell("input multitouch 1 700 1000 700 1000")
         device.shell("input multitouch sync")
@@ -907,21 +1032,18 @@ def scroll_to_element(device, x, y, direction="down", duration=500):
         device.shell(f"input swipe {x} {y} {x} {y+500} {duration}")
     print(" Scroll completed.")
 
-# --- 15. APP-SPECIFIC AUTOMATIONS ---
 def send_whatsapp_quick_message(device, contact, message):
     """Quickly sends a WhatsApp message to a contact."""
     print(f" Quick WhatsApp to {contact}: {message}")
     device.shell("am start -n com.whatsapp/com.whatsapp.HomeActivity")
     time.sleep(2.0)
     
-    # Tap search
     device.shell("input tap 880 150")
     time.sleep(1.0)
     type_text(device, contact)
     simulate_key(device, "enter")
     time.sleep(1.5)
     
-    # Type message
     type_text(device, message)
     simulate_key(device, "enter")
     print(" WhatsApp message sent.")
@@ -948,7 +1070,6 @@ def set_alarm(device, time_str):
     device.shell("am start -a android.intent.action.SET_ALARM")
     time.sleep(2.0)
     
-    # Type time (coordinates may vary)
     device.shell("input tap 500 800")
     time.sleep(0.5)
     type_text(device, time_str)
@@ -961,19 +1082,16 @@ def set_timer(device, duration):
     device.shell("am start -a android.intent.action.SET_TIMER")
     time.sleep(2.0)
     
-    # Type duration (coordinates may vary)
     device.shell("input tap 500 800")
     time.sleep(0.5)
     type_text(device, duration)
     simulate_key(device, "enter")
     print(" Timer set.")
 
-# --- 16. SYSTEM INFORMATION FUNCTIONS ---
 def get_device_info(device):
     """Gets device information."""
     print(" --- DEVICE INFORMATION ---")
     
-    # Model and manufacturer
     model = device.shell("getprop ro.product.model")
     manufacturer = device.shell("getprop ro.product.manufacturer")
     android_version = device.shell("getprop ro.build.version.release")
@@ -982,7 +1100,6 @@ def get_device_info(device):
     print(f" Manufacturer: {manufacturer.strip()}")
     print(f" Android Version: {android_version.strip()}")
     
-    # Screen info
     screen_density = device.shell("wm density")
     screen_size = device.shell("wm size")
     print(f" Screen: {screen_size.strip()}")
@@ -1004,11 +1121,9 @@ def get_network_info(device):
     """Gets network information."""
     print(" --- NETWORK INFORMATION ---")
     
-    # WiFi status
     wifi_status = device.shell("dumpsys wifi | grep Wi-Fi")
     print(f" WiFi: {wifi_status}")
     
-    # IP address
     ip_address = device.shell("ip addr show")
     print(f" IP Address: {ip_address}")
 
@@ -1018,7 +1133,7 @@ def get_installed_apps(device):
     result = device.shell("pm list packages")
     apps = [line.replace("package:", "").strip() for line in result.split("\n") if line.strip()]
     print(f"Total installed apps: {len(apps)}")
-    for app in apps[:50]:  # Show first 50
+    for app in apps[:50]:  
         print(f"  - {app}")
     if len(apps) > 50:
         print(f"  ... and {len(apps) - 50} more")
@@ -1041,7 +1156,6 @@ def get_temperature_info(device):
     result = device.shell("dumpsys battery | grep temperature")
     print(result)
 
-# --- 17. CLIPBOARD MANAGEMENT ---
 def copy_to_clipboard(device, text):
     """Copies text to device clipboard."""
     print(f" Copying to clipboard: {text}")
@@ -1060,7 +1174,6 @@ def clear_clipboard(device):
     device.shell("service call clipboard 3 i32 1 s16 ''")
     print(" Clipboard cleared.")
 
-# --- 18. VOICE ASSISTANT INTEGRATION ---
 def launch_google_assistant(device):
     """Launches Google Assistant."""
     print(" Launching Google Assistant...")
@@ -1074,7 +1187,6 @@ def voice_command(device, command):
     launch_google_assistant(device)
     time.sleep(2.0)
     
-    # Type command (as text input for assistant)
     type_text(device, command)
     simulate_key(device, "enter")
     print(" Voice command sent.")
@@ -1086,7 +1198,6 @@ def launch_siri_alternative(device):
     time.sleep(2.0)
     print(" Voice assistant launched.")
 
-# --- 19. ADVANCED AUTOMATION FUNCTIONS ---
 def create_macro(device, name, commands):
     """Creates a macro with multiple commands."""
     print(f" Creating macro: {name}")
@@ -1120,50 +1231,67 @@ def repeat_action(device, command, times, interval=1.0):
         time.sleep(interval)
     print(f" Action repeated {times} times.")
 
-# Global macros storage
 macros = {}
 
-# --- 20. THE MASTER NATURAL LANGUAGE CONVERSION PIPELINE ---
+def preprocess_natural_command(text_input):
+    """Preprocess conversational natural language commands by stripping filler words and punctuation."""
+    cmd = text_input.strip().lower()
+    
+    for type_prefix in ["type ", "write ", "enter "]:
+        if cmd.startswith(type_prefix):
+            content = text_input[len(type_prefix):].strip()
+            content = re.sub(r'[?.!,;:]+$', '', content)
+            return type_prefix + content
+            
+    cmd = re.sub(r'[?.!,;:]+$', '', cmd)
+    
+    fillers = [
+        "could you please", "would you please", "would you mind", "can you please",
+        "please can you", "could you", "would you", "please try to", "go ahead and",
+        "i want you to", "i need to", "can you", "please", "kindly", "hey phone",
+        "ok phone", "okay phone", "phone", "hey assistant", "ok assistant",
+        "assistant", "now", "immediately", "quickly", "please do", "just"
+    ]
+    
+    for filler in fillers:
+        pattern = r'\b' + re.escape(filler) + r'\b'
+        cmd = re.sub(pattern, '', cmd)
+    
+    cmd = re.sub(r'\s+', ' ', cmd).strip()
+    return cmd
+
+
 def process_dynamic_natural_command(device, text_input):
     """Deconstructs unformatted sentences using regular expressions and strings to execute automations."""
-    cmd = text_input.strip().lower()
+    cmd = preprocess_natural_command(text_input)
     if not cmd:
         return
 
-    print(f" Parsing Conversational Core Context Matrix for: '{text_input}'")
+    print(f" Parsing Conversational Core Context Matrix for: '{cmd}' (raw: '{text_input}')")
 
-    # --- CALLING COMMANDS ---
-    # Matches: "call 1234567890", "call mom", "dial +919876543210"
     call_match = re.search(r'(?:call|dial)\s+(.+)', cmd)
     if call_match and "music" not in cmd:
         target = call_match.group(1).strip()
-        # Check if it's a phone number (contains digits)
         if re.search(r'\d', target):
             make_call(device, target)
         else:
             call_contact(device, target)
         return
 
-    # Matches: "answer call", "pick up"
     if "answer" in cmd and "call" in cmd or "pick up" in cmd:
         answer_call(device)
         return
 
-    # Matches: "reject call", "decline call", "hang up"
     if "reject" in cmd or "decline" in cmd or ("hang up" in cmd or "end call" in cmd):
         end_call(device)
         return
 
-    # --- SIMULTANEOUS MUSIC AND CALL ---
-    # Matches: "play music and call 1234567890", "call mom while playing spotify"
     music_call_match = re.search(r'(?:play\s+music\s+and\s+call|call\s+.+?\s+while\s+playing)\s+(.+)', cmd)
     if music_call_match:
         target = music_call_match.group(1).strip()
-        # Extract phone number from the target
         phone_match = re.search(r'[\d+]+', target)
         if phone_match:
             phone_number = phone_match.group(0)
-            # Extract music app if specified
             if "spotify" in cmd:
                 music_app = "spotify"
             elif "youtube music" in cmd or "yt music" in cmd:
@@ -1171,24 +1299,19 @@ def process_dynamic_natural_command(device, text_input):
             else:
                 music_app = "spotify"
             
-            # Extract search query if present
             search_match = re.search(r'(?:search|play)\s+(.+?)(?:\s+and|\s+while|$)', cmd)
             search_query = search_match.group(1).strip() if search_match else None
             
             play_music_and_call(device, phone_number, music_app, search_query)
         return
 
-    # --- MUSIC SPECIFIC COMMANDS ---
-    # Matches: "play shape of you", "play song blinding lights"
     play_song_match = re.search(r'play\s+(?:song\s+)?(.+)', cmd)
     if play_song_match and "call" not in cmd:
         song_name = play_song_match.group(1).strip()
-        # Check if it's actually a call command masquerading
         if not any(word in song_name.lower() for word in ["call", "dial", "phone"]):
             play_specific_song(device, song_name)
             return
 
-    # Matches: "create playlist workout with songs..."
     playlist_match = re.search(r'create\s+playlist\s+(\w+)(?:\s+with\s+(.+))?', cmd)
     if playlist_match:
         playlist_name = playlist_match.group(1).strip()
@@ -1198,8 +1321,6 @@ def process_dynamic_natural_command(device, text_input):
             create_playlist_and_play(device, playlist_name, songs)
         return
 
-    # --- ADVANCED CROSS-APP DEEP-SEARCH PARSING INJECTIONS ---
-    # Captures: "open instagram and search for specific chat", "search for matrix everywhere"
     match_pattern_1 = re.search(r'(?:open\s+)?([a-z0-9\s_]+)\s+(?:and\s+)?search\s+(?:for\s+)?(.+)', cmd)
     match_pattern_2 = re.search(r'search\s+(?:for\s+)?(.+?)\s+in\s+([a-z0-9\s_]+)', cmd)
     match_pattern_universal = re.search(r'search\s+(?:for\s+)?(.+?)\s+(?:everywhere|on\s+all\s+apps|across\s+everything|anywhere)', cmd)
@@ -1219,7 +1340,6 @@ def process_dynamic_natural_command(device, text_input):
         extracted_app = match_pattern_1.group(1).strip()
         extracted_query = match_pattern_1.group(2).strip()
         
-        # Strip out loose connector linguistic artifacts
         if extracted_query.startswith("for "): extracted_query = extracted_query[4:]
         
         if "everywhere" in extracted_query or "all" in extracted_app or "everything" in extracted_query:
@@ -1229,8 +1349,6 @@ def process_dynamic_natural_command(device, text_input):
             execute_universal_cross_search(device, extracted_app, extracted_query)
         return
 
-    # --- REGEX ACCURATE GRID TOUCH COORDINATE PARSER ---
-    # Matches commands like: "tap 450 1200", "click at 300, 500"
     coord_tap_match = re.search(r'(?:tap|click|touch)(?:\s+at)?\s+(\d+)[,\s]+(\d+)', cmd)
     if coord_tap_match:
         x = coord_tap_match.group(1)
@@ -1238,38 +1356,32 @@ def process_dynamic_natural_command(device, text_input):
         tap_coordinates(device, x, y)
         return
 
-    # Matches bounds maps like: "swipe from 100 500 to 900 500"
     swipe_custom_match = re.search(r'swipe\s+(?:from\s+)?(\d+)[\s,]+(\d+)[\s,]+(?:to\s+)?(\d+)[\s,]+(\d+)', cmd)
     if swipe_custom_match:
         x1, y1, x2, y2 = swipe_custom_match.groups()
         swipe_gesture(device, "custom", exact_coords=f"{x1} {y1} {x2} {y2} 400")
         return
 
-    # --- BROAD TERMINATION INTERCEPTS ---
-    # Matches: "close settings", "kill instagram", "stop whatsapp"
     if any(cmd.startswith(p) for p in ["close ", "kill ", "stop ", "terminate "]):
         for prefix in ["close up ", "close ", "kill ", "stop ", "terminate "]:
             if cmd.startswith(prefix):
-                target_app = text_input[len(prefix):].strip()
+                target_app = cmd[len(prefix):].strip()
                 close_app_safely(device, target_app)
                 return
 
-    # --- BROAD INITIALIZATION INTERCEPTS ---
     if any(cmd.startswith(p) for p in ["open ", "launch ", "start ", "go to "]):
         for prefix in ["open up ", "open ", "launch ", "start ", "go to "]:
             if cmd.startswith(prefix):
-                target_app = text_input[len(prefix):].strip()
+                target_app = cmd[len(prefix):].strip()
                 launch_app_safely(device, target_app)
                 return
 
-    # --- STRING TYPING CONTEXT INJECTIONS ---
     if cmd.startswith("type ") or cmd.startswith("write ") or cmd.startswith("enter "):
-        parts = text_input.split(None, 1)
+        parts = cmd.split(None, 1)
         if len(parts) > 1:
             type_text(device, parts[1])
             return
 
-    # --- POWER TOGGLE MAPPING RULES ---
     if "turn off" in cmd or "lock screen" in cmd or "sleep phone" in cmd or "suspend" in cmd:
         toggle_screen(device, "off")
         return
@@ -1277,14 +1389,12 @@ def process_dynamic_natural_command(device, text_input):
         toggle_screen(device, "on")
         return
 
-    # --- SECURITY INTERCEPT BYPASS PATTERNS ---
     if "unlock" in cmd or "bypass lock" in cmd:
         pin_match = re.search(r'\b\d{4,6}\b', cmd)
         extracted_pin = pin_match.group(0) if pin_match else None
         unlock_with_pin(device, pin_code=extracted_pin)
         return
 
-    # --- HARDWARE CORE BUTTON KEY SIMULATIONS ---
     if "home" in cmd: simulate_key(device, "home"); return
     if "back" in cmd: simulate_key(device, "back"); return
     if "menu" in cmd: simulate_key(device, "menu"); return
@@ -1293,22 +1403,18 @@ def process_dynamic_natural_command(device, text_input):
     if "volume down" in cmd or "vol down" in cmd or "quieter" in cmd: simulate_key(device, "volume_down"); return
     if "mute" in cmd or "silence" in cmd: simulate_key(device, "mute"); return
 
-    # --- DIRECT DIRECTIONAL GESTURE SWEEPS ---
     if "swipe" in cmd or "scroll" in cmd or "slide" in cmd:
         for direction in ["up", "down", "left", "right"]:
             if direction in cmd:
                 swipe_gesture(device, direction)
                 return
 
-    # --- MEDIA DATA RUNTIME KEYS ---
     if "media" in cmd or "music" in cmd or "song" in cmd or "video" in cmd:
         for action in ["play", "pause", "next", "skip", "previous", "prev", "stop", "rewind"]:
             if action in cmd:
                 control_media(device, action)
                 return
 
-    # --- SMS/MESSAGING COMMANDS ---
-    # Matches: "send sms to 1234567890 hello", "text mom I'm coming"
     sms_match = re.search(r'(?:send\s+(?:sms|text|message)\s+(?:to\s+)?)?(\d+|\w+)\s+(.+)', cmd)
     if sms_match and "whatsapp" not in cmd:
         recipient = sms_match.group(1).strip()
@@ -1317,7 +1423,6 @@ def process_dynamic_natural_command(device, text_input):
             send_sms(device, recipient, message)
         return
     
-    # Matches: "send whatsapp to 1234567890 hello", "whatsapp mom hi"
     whatsapp_match = re.search(r'(?:send\s+)?whatsapp\s+(?:to\s+)?(\d+|\w+)\s+(.+)', cmd)
     if whatsapp_match:
         recipient = whatsapp_match.group(1).strip()
@@ -1325,19 +1430,16 @@ def process_dynamic_natural_command(device, text_input):
         send_whatsapp_message(device, recipient, message)
         return
     
-    # Matches: "read last sms", "show messages"
     if "read last sms" in cmd or "show messages" in cmd or "check sms" in cmd:
         read_last_sms(device)
         return
     
-    # Matches: "search sms for hello", "find messages with keyword"
     search_sms_match = re.search(r'(?:search|find)\s+(?:sms|messages?)\s+(?:for\s+)?(.+)', cmd)
     if search_sms_match:
         keyword = search_sms_match.group(1).strip()
         search_sms(device, keyword)
         return
     
-    # Matches: "send email to test@example.com subject hello body world"
     email_match = re.search(r'send\s+email\s+(?:to\s+)?(\S+)\s+(?:subject\s+)?(\S+)\s+(?:body\s+)?(.+)', cmd)
     if email_match:
         recipient = email_match.group(1).strip()
@@ -1346,15 +1448,12 @@ def process_dynamic_natural_command(device, text_input):
         send_email(device, recipient, subject, body)
         return
 
-    # --- FILE MANAGEMENT COMMANDS ---
-    # Matches: "list files in /sdcard", "show files"
     list_files_match = re.search(r'(?:list|show)\s+(?:files?\s+(?:in\s+)?)?(.+)?', cmd)
     if list_files_match:
         path = list_files_match.group(1).strip() if list_files_match.group(1) else "/sdcard"
         list_files(device, path)
         return
     
-    # Matches: "copy file from /sdcard/test.txt to /sdcard/backup"
     copy_match = re.search(r'copy\s+(?:file\s+)?from\s+(.+)\s+to\s+(.+)', cmd)
     if copy_match:
         source = copy_match.group(1).strip()
@@ -1362,7 +1461,6 @@ def process_dynamic_natural_command(device, text_input):
         copy_file(device, source, destination)
         return
     
-    # Matches: "move file from /sdcard/test.txt to /sdcard/new"
     move_match = re.search(r'move\s+(?:file\s+)?from\s+(.+)\s+to\s+(.+)', cmd)
     if move_match:
         source = move_match.group(1).strip()
@@ -1370,21 +1468,18 @@ def process_dynamic_natural_command(device, text_input):
         move_file(device, source, destination)
         return
     
-    # Matches: "delete file /sdcard/test.txt", "remove /sdcard/test.txt"
     delete_match = re.search(r'(?:delete|remove)\s+(?:file\s+)?(.+)', cmd)
     if delete_match:
         filepath = delete_match.group(1).strip()
         delete_file(device, filepath)
         return
     
-    # Matches: "create directory /sdcard/newfolder", "mkdir /sdcard/test"
     mkdir_match = re.search(r'(?:create\s+)?(?:directory|folder|mkdir)\s+(.+)', cmd)
     if mkdir_match:
         path = mkdir_match.group(1).strip()
         create_directory(device, path)
         return
     
-    # Matches: "pull file from /sdcard/test.txt to local.txt"
     pull_match = re.search(r'pull\s+(?:file\s+)?from\s+(.+)\s+(?:to\s+)?(.+)', cmd)
     if pull_match:
         remote_path = pull_match.group(1).strip()
@@ -1392,7 +1487,6 @@ def process_dynamic_natural_command(device, text_input):
         pull_file(device, remote_path, local_path)
         return
     
-    # Matches: "push file local.txt to /sdcard/test.txt"
     push_match = re.search(r'push\s+(?:file\s+)?(.+)\s+(?:to\s+)?(.+)', cmd)
     if push_match:
         local_path = push_match.group(1).strip()
@@ -1400,40 +1494,34 @@ def process_dynamic_natural_command(device, text_input):
         push_file(device, local_path, remote_path)
         return
 
-    # --- SYSTEM SETTINGS COMMANDS ---
-    # Matches: "turn on wifi", "enable wifi", "wifi on"
     wifi_match = re.search(r'(?:turn\s+)?(?:wifi|wi-fi)\s+(on|off|enable|disable)', cmd)
     if wifi_match:
         action = wifi_match.group(1).strip()
         toggle_wifi(device, action)
         return
     
-    # Matches: "turn on bluetooth", "enable bluetooth"
     bt_match = re.search(r'(?:turn\s+)?bluetooth\s+(on|off|enable|disable)', cmd)
     if bt_match:
         action = bt_match.group(1).strip()
         toggle_bluetooth(device, action)
         return
     
-    # Matches: "turn on airplane mode", "enable airplane mode"
     airplane_match = re.search(r'(?:turn\s+)?(?:airplane\s+mode)\s+(on|off|enable|disable)', cmd)
     if airplane_match:
         action = airplane_match.group(1).strip()
         toggle_airplane_mode(device, action)
         return
     
-    # Matches: "set brightness to 150", "brightness 200"
     brightness_match = re.search(r'(?:set\s+)?brightness\s+(?:to\s+)?(\d+)', cmd)
     if brightness_match:
         level = brightness_match.group(1).strip()
         set_brightness(device, level)
         return
     
-    # Matches: "set music volume to 10", "volume ring 5"
     volume_match = re.search(r'(?:set\s+)?(?:music|ring|alarm|notification|system|voice)\s+volume\s+(?:to\s+)?(\d+)', cmd)
     if volume_match:
         level = volume_match.group(1).strip()
-        stream = "music"  # default
+        stream = "music"  
         if "ring" in cmd: stream = "ring"
         elif "alarm" in cmd: stream = "alarm"
         elif "notification" in cmd: stream = "notification"
@@ -1442,71 +1530,57 @@ def process_dynamic_natural_command(device, text_input):
         set_volume(device, stream, level)
         return
     
-    # Matches: "turn on do not disturb", "enable dnd"
     dnd_match = re.search(r'(?:turn\s+)?(?:do\s+not\s+disturb|dnd)\s+(on|off|enable|disable)', cmd)
     if dnd_match:
         action = dnd_match.group(1).strip()
         toggle_do_not_disturb(device, action)
         return
     
-    # Matches: "turn on mobile data", "enable data"
     data_match = re.search(r'(?:turn\s+)?(?:mobile\s+)?data\s+(on|off|enable|disable)', cmd)
     if data_match:
         action = data_match.group(1).strip()
         set_mobile_data(device, action)
         return
     
-    # Matches: "turn on flashlight", "enable flashlight"
     flashlight_match = re.search(r'(?:turn\s+)?flashlight\s+(on|off|enable|disable)', cmd)
     if flashlight_match:
         action = flashlight_match.group(1).strip()
         toggle_flashlight(device, action)
         return
 
-    # --- NOTIFICATION COMMANDS ---
-    # Matches: "list notifications", "show notifications"
     if "list notifications" in cmd or "show notifications" in cmd:
         list_notifications(device)
         return
     
-    # Matches: "clear notifications", "dismiss all notifications"
     if "clear notifications" in cmd or "dismiss all" in cmd:
         clear_notifications(device)
         return
     
-    # Matches: "dismiss notifications from whatsapp"
     dismiss_match = re.search(r'dismiss\s+notifications?\s+from\s+(.+)', cmd)
     if dismiss_match:
         package = dismiss_match.group(1).strip()
         dismiss_notification(device, package)
         return
 
-    # --- CAMERA COMMANDS ---
-    # Matches: "take photo", "capture photo", "take picture"
     if "take photo" in cmd or "capture photo" in cmd or "take picture" in cmd:
         camera = "front" if "front" in cmd else "back"
         take_photo(device, camera)
         return
     
-    # Matches: "start video recording", "record video"
     if "start video" in cmd or "record video" in cmd:
         start_video_recording(device)
         return
     
-    # Matches: "stop video recording", "stop recording"
     if "stop video" in cmd or "stop recording" in cmd:
         stop_video_recording(device)
         return
     
-    # Matches: "flash on", "flash off", "camera flash auto"
     flash_match = re.search(r'(?:camera\s+)?flash\s+(on|off|auto)', cmd)
     if flash_match:
         mode = flash_match.group(1).strip()
         toggle_camera_flash(device, mode)
         return
 
-    # --- ADVANCED GESTURE COMMANDS ---
-    # Matches: "long press at 500 500", "long press 300 400"
     long_press_match = re.search(r'long\s+press\s+(?:at\s+)?(\d+)\s+(\d+)', cmd)
     if long_press_match:
         x = long_press_match.group(1).strip()
@@ -1514,7 +1588,6 @@ def process_dynamic_natural_command(device, text_input):
         long_press(device, x, y)
         return
     
-    # Matches: "double tap at 500 500", "double tap 300 400"
     double_tap_match = re.search(r'double\s+tap\s+(?:at\s+)?(\d+)\s+(\d+)', cmd)
     if double_tap_match:
         x = double_tap_match.group(1).strip()
@@ -1522,7 +1595,6 @@ def process_dynamic_natural_command(device, text_input):
         double_tap(device, x, y)
         return
     
-    # Matches: "pinch in", "pinch out", "zoom in", "zoom out"
     if "pinch in" in cmd or "zoom out" in cmd:
         pinch_zoom(device, "in")
         return
@@ -1530,7 +1602,6 @@ def process_dynamic_natural_command(device, text_input):
         pinch_zoom(device, "out")
         return
     
-    # Matches: "scroll down at 500 1000", "scroll up 500 500"
     scroll_match = re.search(r'scroll\s+(up|down)\s+(?:at\s+)?(\d+)\s+(\d+)', cmd)
     if scroll_match:
         direction = scroll_match.group(1).strip()
@@ -1539,8 +1610,6 @@ def process_dynamic_natural_command(device, text_input):
         scroll_to_element(device, x, y, direction)
         return
 
-    # --- APP-SPECIFIC AUTOMATION COMMANDS ---
-    # Matches: "whatsapp mom hello", "send whatsapp quick message to john hi"
     wa_quick_match = re.search(r'(?:send\s+)?whatsapp\s+(?:quick\s+message\s+(?:to\s+)?)?(\w+)\s+(.+)', cmd)
     if wa_quick_match:
         contact = wa_quick_match.group(1).strip()
@@ -1548,56 +1617,46 @@ def process_dynamic_natural_command(device, text_input):
         send_whatsapp_quick_message(device, contact, message)
         return
     
-    # Matches: "navigate to New York", "go to Times Square"
     nav_match = re.search(r'(?:navigate\s+(?:to\s+)?|go\s+to\s+)(.+)', cmd)
     if nav_match and "app" not in cmd:
         destination = nav_match.group(1).strip()
         open_google_maps_navigation(device, destination)
         return
     
-    # Matches: "set alarm for 7:00", "alarm 8:30"
     alarm_match = re.search(r'(?:set\s+)?alarm\s+(?:for\s+)?(.+)', cmd)
     if alarm_match:
         time_str = alarm_match.group(1).strip()
         set_alarm(device, time_str)
         return
     
-    # Matches: "set timer for 5 minutes", "timer 10 minutes"
     timer_match = re.search(r'(?:set\s+)?timer\s+(?:for\s+)?(.+)', cmd)
     if timer_match:
         duration = timer_match.group(1).strip()
         set_timer(device, duration)
         return
     
-    # Matches: "create calendar event meeting tomorrow 10am"
     calendar_match = re.search(r'create\s+(?:calendar\s+)?event\s+(.+)', cmd)
     if calendar_match:
         event_details = calendar_match.group(1).strip()
         create_calendar_event(device, event_details, "", "")
         return
 
-    # --- SYSTEM INFORMATION COMMANDS ---
-    # Matches: "device info", "phone info", "show device information"
     if "device info" in cmd or "phone info" in cmd or "show device" in cmd:
         get_device_info(device)
         return
     
-    # Matches: "storage info", "disk info", "show storage"
     if "storage info" in cmd or "disk info" in cmd or "show storage" in cmd:
         get_storage_info(device)
         return
     
-    # Matches: "memory info", "ram info", "show memory"
     if "memory info" in cmd or "ram info" in cmd or "show memory" in cmd:
         get_memory_info(device)
         return
     
-    # Matches: "network info", "wifi info", "show network"
     if "network info" in cmd or "wifi info" in cmd or "show network" in cmd:
         get_network_info(device)
         return
     
-    # Matches: "installed apps", "list apps", "show installed apps"
     if "installed apps" in cmd or "list apps" in cmd or "show apps" in cmd:
         get_installed_apps(device)
         return
@@ -1663,7 +1722,6 @@ def process_dynamic_natural_command(device, text_input):
         schedule_task(device, command, delay)
         return
     
-    # Matches: "repeat action tap 500 500 5 times", "repeat open whatsapp 3"
     repeat_match = re.search(r'repeat\s+(?:action\s+)?(.+?)\s+(\d+)\s+times?', cmd)
     if repeat_match:
         command = repeat_match.group(1).strip()

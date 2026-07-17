@@ -27,7 +27,6 @@ def main():
     url = "http://localhost:3000"
     print(f"Opening {url} in Chrome...")
     
-    # Try to open specifically in Chrome on Windows
     chrome_path_64 = "C:/Program Files/Google/Chrome/Application/chrome.exe"
     chrome_path_32 = "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe"
     
@@ -37,7 +36,6 @@ def main():
         elif os.path.exists(chrome_path_32):
             webbrowser.get(f'"{chrome_path_32}" %s').open(url)
         else:
-            # Fallback to default browser
             webbrowser.open(url)
     except Exception as e:
         print(f"Failed to open Chrome specifically: {e}")
@@ -46,7 +44,6 @@ def main():
     print("\n--- Both servers are running. Press Ctrl+C to stop. ---")
     
     try:
-        # Wait for processes so the script doesn't exit immediately
         backend_process.wait()
         frontend_process.wait()
     except KeyboardInterrupt:

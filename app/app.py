@@ -7,14 +7,14 @@ import base64
 import json
 import subprocess
 from contextlib import redirect_stdout
-from flask import Flask, request, jsonify, send_from_directory, send_file
+from flask import Flask, request, jsonify, send_from_directory, send_file, after_this_request
 
-# Add parent directory to path
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(parent_dir)
 
 from android_automation import (
     connect_to_phone,
+    clean_package_name,
     process_dynamic_natural_command,
     take_screenshot,
     show_battery_diagnostics,
@@ -71,28 +71,23 @@ from android_automation import (
     open_google_maps_navigation,
     create_calendar_event,
     unlock_with_pin,
+    unlock_with_pattern,
     is_screen_on,
     clear_recent_apps,
     control_active_call,
     make_whatsapp_call
 )
 
-# Serve React build
 FRONTEND_BUILD = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'frontend', 'dist')
 
 app = Flask(__name__, static_folder=FRONTEND_BUILD, static_url_path='')
 
-# Global device connection
 device = None
 
-# Screenshots directory
 SCREENSHOTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'screenshots')
 os.makedirs(SCREENSHOTS_DIR, exist_ok=True)
 
 
-# ---------------------------------------------------------------------------
-# Utility: capture stdout from legacy print-only functions
-# ---------------------------------------------------------------------------
 def capture_output(func, *args, **kwargs):
     """Run a function and capture its stdout output."""
     buf = io.StringIO()
@@ -101,9 +96,6 @@ def capture_output(func, *args, **kwargs):
     return buf.getvalue(), result
 
 
-# ---------------------------------------------------------------------------
-# Serve React SPA
-# ---------------------------------------------------------------------------
 @app.route('/')
 def serve_react():
     return send_from_directory(FRONTEND_BUILD, 'index.html')
@@ -111,22 +103,17 @@ def serve_react():
 
 @app.errorhandler(404)
 def not_found(e):
-    # For SPA client-side routing, serve index.html for unknown routes
     if not request.path.startswith('/api/'):
         return send_from_directory(FRONTEND_BUILD, 'index.html')
     return jsonify({'success': False, 'message': 'Not found'}), 404
 
 
-# ---------------------------------------------------------------------------
-# API: Connection
-# ---------------------------------------------------------------------------
 @app.route('/api/connect', methods=['POST'])
 def api_connect():
     global device
     try:
         device = connect_to_phone()
         if device:
-            # Get basic device info on connect
             model = device.shell("getprop ro.product.model").strip()
             manufacturer = device.shell("getprop ro.product.manufacturer").strip()
             android_ver = device.shell("getprop ro.build.version.release").strip()
@@ -159,9 +146,6 @@ def api_status():
     return jsonify({'success': True, 'connected': False})
 
 
-# ---------------------------------------------------------------------------
-# API: Screen Mirror
-# ---------------------------------------------------------------------------
 @app.route('/api/mirror', methods=['GET'])
 def api_mirror():
     """Capture current screen and return as base64-encoded JPEG."""
@@ -170,7 +154,6 @@ def api_mirror():
         return jsonify({'success': False, 'message': 'Device not connected'}), 400
     try:
         temp_path = os.path.join(SCREENSHOTS_DIR, '_mirror.png')
-        # screencap is relatively slow, but we'll stick to it.
         device.shell("screencap -p /sdcard/_mirror_tmp.png")
         device.pull("/sdcard/_mirror_tmp.png", temp_path)
         device.shell("rm /sdcard/_mirror_tmp.png")
@@ -183,9 +166,6 @@ def api_mirror():
         return jsonify({'success': False, 'message': str(e)})
 
 
-# ---------------------------------------------------------------------------
-# API: Tap on mirror
-# ---------------------------------------------------------------------------
 @app.route('/api/tap', methods=['POST'])
 def api_tap():
     global device
@@ -200,9 +180,6 @@ def api_tap():
         return jsonify({'success': False, 'message': str(e)})
 
 
-# ---------------------------------------------------------------------------
-# API: Unlock / PIN entry
-# ---------------------------------------------------------------------------
 @app.route('/api/unlock', methods=['POST'])
 def api_unlock():
     global device
@@ -213,41 +190,40 @@ def api_unlock():
     value = request.json.get('value', '')
     
     try:
-        # Wake screen
         screen_on = is_screen_on(device)
         if not screen_on:
             device.shell("input keyevent 224")
             time.sleep(0.5)
             
-        # Swipe up to show keyguard
         device.shell("input swipe 500 1500 500 500 300")
         time.sleep(0.5)
         
         if unlock_type in ['pin', 'password']:
             if value:
-                # Escape spaces for password
-                escaped_val = value.replace(" ", "%s")
-                device.shell(f"input text {escaped_val}")
+                escaped_val = str(value).replace(" ", "%s").replace("'", "\\'")
+                device.shell(f"input text '{escaped_val}'")
                 time.sleep(0.3)
                 device.shell("input keyevent 66")
         elif unlock_type == 'pattern':
-            # Value is expected to be a list of dots like [1,2,3]
-            # Since pattern injection via adb swipe is complex and screen-size dependent,
-            # we will just swipe generally or output a message that pattern needs real coords.
-            # A true pattern unlock requires generating a continuous swipe path.
-            # For this MVP, we simulate a simple swipe if it's a known pattern, but generally
-            # ADB struggles with exact pattern bounds without UI Automator.
             if value:
-                return jsonify({'success': False, 'message': 'Pattern unlock via ADB requires coordinate mapping. Use PIN/Password for guaranteed success.'})
+                if isinstance(value, list):
+                    pattern_seq = [int(v) for v in value]
+                elif isinstance(value, str):
+                    if ',' in value:
+                        pattern_seq = [int(v.strip()) for v in value.split(',') if v.strip().isdigit()]
+                    else:
+                        pattern_seq = [int(v) for v in value if v.isdigit()]
+                else:
+                    pattern_seq = []
+                
+                if pattern_seq:
+                    unlock_with_pattern(device, pattern_seq)
 
         return jsonify({'success': True, 'message': 'Unlock sequence sent'})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)})
 
 
-# ---------------------------------------------------------------------------
-# API: Wake / Sleep
-# ---------------------------------------------------------------------------
 @app.route('/api/screen', methods=['POST'])
 def api_screen():
     global device
@@ -261,9 +237,6 @@ def api_screen():
         return jsonify({'success': False, 'message': str(e)})
 
 
-# ---------------------------------------------------------------------------
-# API: Natural Command
-# ---------------------------------------------------------------------------
 @app.route('/api/command', methods=['POST'])
 def api_command():
     global device
@@ -278,9 +251,6 @@ def api_command():
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)})
 
-# ---------------------------------------------------------------------------
-# API: Keyboard Input
-# ---------------------------------------------------------------------------
 @app.route('/api/keyboard', methods=['POST'])
 def api_keyboard():
     global device
@@ -292,7 +262,6 @@ def api_keyboard():
     
     try:
         if key:
-            # Handle special keys
             keys = {
                 'Enter': 66, 'Backspace': 67, 'Space': 62, 'Tab': 61,
                 'ArrowUp': 19, 'ArrowDown': 20, 'ArrowLeft': 21, 'ArrowRight': 22,
@@ -302,7 +271,6 @@ def api_keyboard():
                 device.shell(f"input keyevent {keys[key]}")
                 return jsonify({'success': True, 'message': f'Key {key} pressed'})
             elif len(key) == 1:
-                # Fallback to text injection for single characters
                 text = key
         
         if text:
@@ -315,9 +283,6 @@ def api_keyboard():
         return jsonify({'success': False, 'message': str(e)})
 
 
-# ---------------------------------------------------------------------------
-# API: Screenshot (capture + return viewable image)
-# ---------------------------------------------------------------------------
 @app.route('/api/screenshot', methods=['POST'])
 def api_screenshot():
     global device
@@ -343,9 +308,6 @@ def api_screenshot():
         return jsonify({'success': False, 'message': str(e)})
 
 
-# ---------------------------------------------------------------------------
-# API: Battery (structured)
-# ---------------------------------------------------------------------------
 @app.route('/api/battery', methods=['GET'])
 def api_battery():
     global device
@@ -360,7 +322,6 @@ def api_battery():
                 key, val = line.split(':', 1)
                 key = key.strip().lower().replace(' ', '_')
                 val = val.strip()
-                # Try to parse numbers
                 try:
                     val = int(val)
                 except ValueError:
@@ -369,7 +330,6 @@ def api_battery():
                     except ValueError:
                         pass
                 data[key] = val
-        # Convert temperature (tenths of degree C)
         if 'temperature' in data and isinstance(data['temperature'], (int, float)):
             data['temperature_c'] = round(data['temperature'] / 10, 1)
         return jsonify({'success': True, 'data': data})
@@ -377,9 +337,6 @@ def api_battery():
         return jsonify({'success': False, 'message': str(e)})
 
 
-# ---------------------------------------------------------------------------
-# API: Device Info (structured)
-# ---------------------------------------------------------------------------
 @app.route('/api/device_info', methods=['GET'])
 def api_device_info():
     global device
@@ -414,38 +371,42 @@ def api_device_info():
         return jsonify({'success': False, 'message': str(e)})
 
 
-# ---------------------------------------------------------------------------
-# API: Storage Info
-# ---------------------------------------------------------------------------
 @app.route('/api/storage', methods=['GET'])
 def api_storage():
     global device
     if not device:
         return jsonify({'success': False, 'message': 'Device not connected'})
     try:
-        raw = device.shell("df -h /data /sdcard /storage/emulated 2>/dev/null || df -h")
+        raw = device.shell("df -h /data /sdcard 2>/dev/null || df -h")
         lines = [l for l in raw.strip().split('\n') if l.strip()]
         entries = []
-        if len(lines) > 1:
-            for line in lines[1:]:
-                parts = line.split()
-                if len(parts) >= 6:
-                    entries.append({
-                        'filesystem': parts[0],
-                        'size': parts[1],
-                        'used': parts[2],
-                        'available': parts[3],
-                        'use_percent': parts[4],
-                        'mounted_on': parts[5]
-                    })
+        seen_mounts = set()
+        for line in lines:
+            parts = line.split()
+            if len(parts) >= 6 and not parts[0].lower().startswith("filesystem"):
+                mounted_on = parts[5]
+                label = mounted_on
+                if mounted_on == '/data':
+                    label = 'System Storage (/data)'
+                elif mounted_on == '/sdcard' or 'emulated' in mounted_on:
+                    label = 'Internal Storage (/sdcard)'
+                
+                if label in seen_mounts:
+                    continue
+                seen_mounts.add(label)
+                entries.append({
+                    'filesystem': parts[0],
+                    'size': parts[1],
+                    'used': parts[2],
+                    'available': parts[3],
+                    'use_percent': parts[4],
+                    'mounted_on': label
+                })
         return jsonify({'success': True, 'data': entries, 'raw': raw.strip()})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)})
 
 
-# ---------------------------------------------------------------------------
-# API: Memory Info
-# ---------------------------------------------------------------------------
 @app.route('/api/memory', methods=['GET'])
 def api_memory():
     global device
@@ -479,9 +440,6 @@ def api_memory():
         return jsonify({'success': False, 'message': str(e)})
 
 
-# ---------------------------------------------------------------------------
-# API: Network Info
-# ---------------------------------------------------------------------------
 @app.route('/api/network', methods=['GET'])
 def api_network():
     global device
@@ -511,9 +469,6 @@ def api_network():
         return jsonify({'success': False, 'message': str(e)})
 
 
-# ---------------------------------------------------------------------------
-# API: CPU Info
-# ---------------------------------------------------------------------------
 @app.route('/api/cpu', methods=['GET'])
 def api_cpu():
     global device
@@ -536,9 +491,6 @@ def api_cpu():
         return jsonify({'success': False, 'message': str(e)})
 
 
-# ---------------------------------------------------------------------------
-# API: Temperature
-# ---------------------------------------------------------------------------
 @app.route('/api/temperature', methods=['GET'])
 def api_temperature():
     global device
@@ -560,9 +512,6 @@ def api_temperature():
         return jsonify({'success': False, 'message': str(e)})
 
 
-# ---------------------------------------------------------------------------
-# API: Installed Apps
-# ---------------------------------------------------------------------------
 @app.route('/api/apps', methods=['GET'])
 def api_apps():
     global device
@@ -570,15 +519,19 @@ def api_apps():
         return jsonify({'success': False, 'message': 'Device not connected'})
     try:
         raw = device.shell("pm list packages -3")
-        apps = sorted([l.replace("package:", "").strip() for l in raw.split('\n') if l.strip()])
-        return jsonify({'success': True, 'data': apps, 'count': len(apps)})
+        packages = [l.replace("package:", "").strip() for l in raw.split('\n') if l.strip()]
+        apps_list = []
+        for pkg in packages:
+            apps_list.append({
+                'name': clean_package_name(pkg),
+                'package': pkg
+            })
+        apps_list.sort(key=lambda x: x['name'].lower())
+        return jsonify({'success': True, 'data': apps_list, 'count': len(apps_list)})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)})
 
 
-# ---------------------------------------------------------------------------
-# API: Launch / Close App
-# ---------------------------------------------------------------------------
 @app.route('/api/launch_app', methods=['POST'])
 def api_launch_app():
     global device
@@ -605,9 +558,6 @@ def api_close_app():
         return jsonify({'success': False, 'message': str(e)})
 
 
-# ---------------------------------------------------------------------------
-# API: File Management
-# ---------------------------------------------------------------------------
 @app.route('/api/files', methods=['POST'])
 def api_files():
     global device
@@ -721,9 +671,63 @@ def api_file_push():
         return jsonify({'success': False, 'message': str(e)})
 
 
-# ---------------------------------------------------------------------------
-# API: Settings Toggles
-# ---------------------------------------------------------------------------
+@app.route('/api/file/upload', methods=['POST'])
+def api_file_upload():
+    global device
+    if not device:
+        return jsonify({'success': False, 'message': 'Device not connected'})
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'message': 'No file part'})
+    file = request.files['file']
+    remote_path = request.form.get('remote_path', '/sdcard')
+    if file.filename == '':
+        return jsonify({'success': False, 'message': 'No selected file'})
+        
+    try:
+        temp_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'temp_uploads')
+        os.makedirs(temp_dir, exist_ok=True)
+        temp_path = os.path.join(temp_dir, file.filename)
+        file.save(temp_path)
+        
+        remote_file_path = os.path.join(remote_path, file.filename).replace('\\', '/')
+        device.push(temp_path, remote_file_path)
+        
+        os.remove(temp_path)
+        return jsonify({'success': True, 'message': f'Uploaded {file.filename} to {remote_path}'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
+
+
+@app.route('/api/file/download', methods=['GET'])
+def api_file_download():
+    global device
+    if not device:
+        return 'Device not connected', 400
+    remote_path = request.args.get('path', '')
+    if not remote_path:
+        return 'No path specified', 400
+        
+    try:
+        filename = os.path.basename(remote_path)
+        temp_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'temp_downloads')
+        os.makedirs(temp_dir, exist_ok=True)
+        temp_path = os.path.join(temp_dir, filename)
+        
+        device.pull(remote_path, temp_path)
+        
+        @after_this_request
+        def cleanup(response):
+            try:
+                os.remove(temp_path)
+            except Exception:
+                pass
+            return response
+            
+        return send_file(temp_path, as_attachment=True, download_name=filename)
+    except Exception as e:
+        return str(e), 500
+
+
 @app.route('/api/toggle', methods=['POST'])
 def api_toggle():
     global device
@@ -744,12 +748,10 @@ def api_toggle():
         elif setting == 'dnd':
             output, _ = capture_output(toggle_do_not_disturb, device, action)
         elif setting == 'flashlight':
-            # Fixed flashlight: use cmd to toggle torch
             if action in ['on', 'enable']:
                 device.shell("cmd statusbar expand-notifications")
                 time.sleep(0.5)
                 device.shell("cmd statusbar collapse")
-                # Direct approach via settings
                 device.shell("settings put system flashlight_enabled 1")
             else:
                 device.shell("settings put system flashlight_enabled 0")
@@ -784,7 +786,6 @@ def api_volume():
     percentage = request.json.get('level', 50)
     
     try:
-        # Map 0-100 to 0-15
         level = int((percentage / 100) * 15)
         output, _ = capture_output(set_volume, device, stream, level)
         return jsonify({'success': True, 'message': f'{stream} volume set to {percentage}%'})
@@ -800,16 +801,12 @@ def api_ringer_mode():
     
     try:
         if mode == 'silent':
-            # Ringer mode silent (0)
             device.shell("service call audio 6 i32 0")
-            # Enable DND to ensure silence
             device.shell("settings put global zen_mode 1")
         elif mode == 'vibrate':
-            # Ringer mode vibrate (1)
             device.shell("service call audio 6 i32 1")
             device.shell("settings put global zen_mode 0")
-        else: # normal/ring
-            # Ringer mode normal (2)
+        else: 
             device.shell("service call audio 6 i32 2")
             device.shell("settings put global zen_mode 0")
             
@@ -818,9 +815,6 @@ def api_ringer_mode():
         return jsonify({'success': False, 'message': str(e)})
 
 
-# ---------------------------------------------------------------------------
-# API: Key simulation (Home, Back, Menu, Volume, Mute)
-# ---------------------------------------------------------------------------
 @app.route('/api/key', methods=['POST'])
 def api_key():
     global device
@@ -828,9 +822,7 @@ def api_key():
         return jsonify({'success': False, 'message': 'Device not connected'})
     key_name = request.json.get('key', 'home')
     try:
-        # Fix mute: use proper ringer mode toggle
         if key_name == 'mute':
-            # Get current ringer mode
             current = device.shell("settings get global zen_mode").strip()
             if current == '0':
                 device.shell("settings put global zen_mode 1")
@@ -848,9 +840,6 @@ def api_key():
         return jsonify({'success': False, 'message': str(e)})
 
 
-# ---------------------------------------------------------------------------
-# API: Communication
-# ---------------------------------------------------------------------------
 @app.route('/api/call', methods=['POST'])
 def api_call():
     global device
@@ -858,7 +847,7 @@ def api_call():
         return jsonify({'success': False, 'message': 'Device not connected'})
     action = request.json.get('action', 'make')
     number = request.json.get('number', '')
-    call_type = request.json.get('type', 'voice') # 'voice' or 'video' for whatsapp
+    call_type = request.json.get('type', 'voice') 
     
     try:
         if action == 'make':
@@ -925,11 +914,9 @@ def api_whatsapp():
         import urllib.parse
         clean_number = re.sub(r'[^\d+]', '', number)
         encoded_msg = urllib.parse.quote(message)
-        # Use the correct WhatsApp API URL
         url = f"https://api.whatsapp.com/send?phone={clean_number}&text={encoded_msg}"
         device.shell(f"am start -a android.intent.action.VIEW -d '{url}'")
         time.sleep(3)
-        # Auto-tap the send button (WhatsApp send is typically bottom-right)
         device.shell("input tap 940 1600")
         time.sleep(0.5)
         return jsonify({'success': True, 'message': f'WhatsApp message sent to {number}'})
@@ -952,9 +939,6 @@ def api_email():
         return jsonify({'success': False, 'message': str(e)})
 
 
-# ---------------------------------------------------------------------------
-# API: Media Controls
-# ---------------------------------------------------------------------------
 @app.route('/api/media', methods=['POST'])
 def api_media():
     global device
@@ -968,9 +952,6 @@ def api_media():
         return jsonify({'success': False, 'message': str(e)})
 
 
-# ---------------------------------------------------------------------------
-# API: Camera
-# ---------------------------------------------------------------------------
 @app.route('/api/camera/photo', methods=['POST'])
 def api_camera_photo():
     global device
@@ -978,17 +959,21 @@ def api_camera_photo():
         return jsonify({'success': False, 'message': 'Device not connected'})
     camera = request.json.get('camera', 'back')
     try:
-        # Launch camera with specific facing intent
+        device.shell("am start -a android.media.action.STILL_IMAGE_CAMERA")
+        time.sleep(3)  
+        
         if camera == 'front':
-            # Use intent to launch front camera
-            device.shell("am start -a android.media.action.IMAGE_CAPTURE --ei android.intent.extras.CAMERA_FACING 1")
-        else:
-            device.shell("am start -a android.media.action.IMAGE_CAPTURE --ei android.intent.extras.CAMERA_FACING 0")
-        time.sleep(3)
-        # Capture using hardware key
-        device.shell("input keyevent 27")
+            device.shell("am start -a android.media.action.STILL_IMAGE_CAMERA --ei android.intent.extras.CAMERA_FACING 1")
+            time.sleep(1)
+        
+        time.sleep(1)
+        
+        device.shell("input keyevent KEYCODE_CAMERA")
+        time.sleep(1)
+        device.shell("input keyevent KEYCODE_VOLUME_DOWN")
         time.sleep(2)
-        return jsonify({'success': True, 'message': f'Photo taken with {camera} camera'})
+        
+        return jsonify({'success': True, 'message': f'Photo captured with {camera} camera'})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)})
 
@@ -1002,19 +987,20 @@ def api_camera_video():
     try:
         if action == 'start':
             device.shell("am start -a android.media.action.VIDEO_CAPTURE")
-            time.sleep(3)
-            device.shell("input keyevent 27")
+            time.sleep(3)  
+            device.shell("input keyevent KEYCODE_MEDIA_RECORD")
+            time.sleep(1)
             return jsonify({'success': True, 'message': 'Video recording started'})
         else:
-            device.shell("input keyevent 27")
+            device.shell("input keyevent KEYCODE_MEDIA_RECORD")
+            time.sleep(1)
+            device.shell("input keyevent KEYCODE_CAMERA")
+            time.sleep(1)
             return jsonify({'success': True, 'message': 'Video recording stopped'})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)})
 
 
-# ---------------------------------------------------------------------------
-# API: Notifications
-# ---------------------------------------------------------------------------
 @app.route('/api/notifications', methods=['POST'])
 def api_notifications():
     global device
@@ -1023,8 +1009,9 @@ def api_notifications():
     action = request.json.get('action', 'list')
     try:
         if action == 'list':
-            raw = device.shell("dumpsys notification --noredact | grep -A 2 'pkg=' | head -100")
-            return jsonify({'success': True, 'data': raw.strip()})
+            raw = device.shell("dumpsys notification --noredact")
+            notifications = _parse_notifications(raw)
+            return jsonify({'success': True, 'data': notifications})
         elif action == 'clear':
             device.shell("service call notification 1")
             return jsonify({'success': True, 'message': 'Notifications cleared'})
@@ -1033,9 +1020,67 @@ def api_notifications():
         return jsonify({'success': False, 'message': str(e)})
 
 
-# ---------------------------------------------------------------------------
-# API: Automation
-# ---------------------------------------------------------------------------
+def _parse_notifications(raw):
+    """Parse dumpsys notification --noredact into structured notification objects."""
+    notifications = []
+    seen = set()
+    
+    blocks = re.split(r'NotificationRecord\(', raw)
+    
+    for block in blocks[1:]:  
+        try:
+            pkg_match = re.search(r'pkg=(\S+)', block)
+            pkg = pkg_match.group(1) if pkg_match else None
+            if not pkg:
+                continue
+            
+            title_match = re.search(r'android\.title=([^\n]+)', block)
+            title = title_match.group(1).strip() if title_match else ''
+            
+            text_match = re.search(r'android\.text=([^\n]+)', block)
+            text = text_match.group(1).strip() if text_match else ''
+            
+            subtext_match = re.search(r'android\.subText=([^\n]+)', block)
+            subtext = subtext_match.group(1).strip() if subtext_match else ''
+            
+            time_match = re.search(r'postTime=(\d+)', block)
+            post_time = int(time_match.group(1)) if time_match else 0
+            
+            if not title and not text:
+                continue
+            
+            if title == 'null':
+                title = ''
+            if text == 'null':
+                text = ''
+            if subtext == 'null':
+                subtext = ''
+            
+            if not title and not text:
+                continue
+            
+            dedup_key = f"{pkg}|{title}|{text}"
+            if dedup_key in seen:
+                continue
+            seen.add(dedup_key)
+            
+            app_name = clean_package_name(pkg)
+            
+            notifications.append({
+                'package': pkg,
+                'app': app_name,
+                'title': title,
+                'text': text,
+                'subtext': subtext,
+                'time': post_time,
+            })
+        except Exception:
+            continue
+    
+    notifications.sort(key=lambda n: n.get('time', 0), reverse=True)
+    return notifications
+
+
 @app.route('/api/alarm', methods=['POST'])
 def api_alarm():
     global device
@@ -1043,7 +1088,6 @@ def api_alarm():
         return jsonify({'success': False, 'message': 'Device not connected'})
     time_str = request.json.get('time', '')
     try:
-        # Parse hour and minute
         parts = time_str.replace('.', ':').split(':')
         hour = int(parts[0]) if parts else 7
         minute = int(parts[1]) if len(parts) > 1 else 0
@@ -1087,11 +1131,30 @@ def api_calendar():
     if not device:
         return jsonify({'success': False, 'message': 'Device not connected'})
     title = request.json.get('title', '')
+    description = request.json.get('description', '')
+    location = request.json.get('location', '')
+    begin_time = request.json.get('beginTime', '')
+    end_time = request.json.get('endTime', '')
     try:
-        import urllib.parse
-        encoded = urllib.parse.quote(title)
-        device.shell(f"am start -a android.intent.action.INSERT -t 'vnd.android.cursor.dir/event' --es title '{title}'")
-        return jsonify({'success': True, 'message': f'Calendar event created: {title}'})
+        cmd = "am start -a android.intent.action.INSERT -t 'vnd.android.cursor.dir/event'"
+        cmd += f" --es title \"{title.replace('&', '\&').replace('\"', '\\\"')}\""
+        if description:
+            cmd += f" --es description \"{description.replace('&', '\&').replace('\"', '\\\"')}\""
+        if location:
+            cmd += f" --es eventLocation \"{location.replace('&', '\&').replace('\"', '\\\"')}\""
+        
+        import datetime
+        if begin_time:
+            dt = datetime.datetime.fromisoformat(begin_time)
+            epoch_ms = int(dt.timestamp() * 1000)
+            cmd += f" --el beginTime {epoch_ms}"
+        if end_time:
+            dt = datetime.datetime.fromisoformat(end_time)
+            epoch_ms = int(dt.timestamp() * 1000)
+            cmd += f" --el endTime {epoch_ms}"
+            
+        device.shell(cmd)
+        return jsonify({'success': True, 'message': f'Calendar event composed: {title}'})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)})
 

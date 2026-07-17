@@ -1,9 +1,7 @@
-/* ============================================================
-   PHONE CONTROL CENTER -- Cinematic Cyber Theme
-   ============================================================ */
+
 
 :root {
-  /* Core palette */
+  
   --bg-deepest: #050508;
   --bg-deep: #0a0b10;
   --bg-surface: #101218;
@@ -11,13 +9,13 @@
   --bg-elevated: #1a1d28;
   --bg-input: #0d0e14;
 
-  /* Accent: Electric Cyan */
+  
   --accent: #00e5ff;
   --accent-dim: #00b8d4;
   --accent-glow: rgba(0, 229, 255, 0.15);
   --accent-glow-strong: rgba(0, 229, 255, 0.3);
 
-  /* Secondary accents */
+  
   --green: #00e676;
   --green-dim: #00c853;
   --red: #ff1744;
@@ -26,29 +24,29 @@
   --yellow: #ffea00;
   --purple: #d500f9;
 
-  /* Text */
+  
   --text-primary: #e8eaed;
   --text-secondary: #9aa0a6;
   --text-muted: #5f6368;
   --text-accent: var(--accent);
 
-  /* Borders */
+  
   --border: rgba(255, 255, 255, 0.06);
   --border-accent: rgba(0, 229, 255, 0.2);
 
-  /* Shadows */
+  
   --shadow-sm: 0 1px 3px rgba(0,0,0,0.5);
   --shadow-md: 0 4px 12px rgba(0,0,0,0.6);
   --shadow-lg: 0 8px 32px rgba(0,0,0,0.7);
   --shadow-glow: 0 0 20px rgba(0, 229, 255, 0.1);
 
-  /* Radii */
+  
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 16px;
   --radius-xl: 24px;
 
-  /* Transitions */
+  
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -81,21 +79,19 @@ body {
   100% { background-position: 0% 50%; }
 }
 
-/* Custom scrollbar */
+
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: var(--bg-deep); }
 ::-webkit-scrollbar-thumb { background: var(--border-accent); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--accent-dim); }
 
-/* ============================================================
-   LAYOUT
-   ============================================================ */
+
 .app-layout {
   display: flex;
   min-height: 100vh;
 }
 
-/* ---------- Sidebar ---------- */
+
 .sidebar {
   width: 260px;
   background: rgba(16, 18, 24, 0.4);
@@ -204,7 +200,7 @@ body {
   flex-shrink: 0;
 }
 
-/* ---------- Main content ---------- */
+
 .main-content {
   flex: 1;
   margin-left: 260px;
@@ -212,9 +208,7 @@ body {
   min-height: 100vh;
 }
 
-/* ============================================================
-   SECTION STRUCTURE
-   ============================================================ */
+
 .section {
   margin-bottom: 32px;
   scroll-margin-top: 24px;
@@ -245,9 +239,7 @@ body {
   margin-left: 8px;
 }
 
-/* ============================================================
-   CARDS
-   ============================================================ */
+
 .card {
   background: rgba(20, 22, 30, 0.45);
   backdrop-filter: blur(16px);
@@ -282,9 +274,7 @@ body {
   gap: 16px;
 }
 
-/* ============================================================
-   GLASS PANELS
-   ============================================================ */
+
 .glass {
   background: rgba(20, 22, 30, 0.7);
   backdrop-filter: blur(16px);
@@ -293,9 +283,7 @@ body {
   border-radius: var(--radius-lg);
 }
 
-/* ============================================================
-   BUTTONS
-   ============================================================ */
+
 .btn {
   display: inline-flex;
   align-items: center;
@@ -391,9 +379,7 @@ body {
   gap: 8px;
 }
 
-/* ============================================================
-   INPUTS
-   ============================================================ */
+
 .input {
   width: 100%;
   padding: 10px 14px;
@@ -445,9 +431,7 @@ select.input {
   padding-right: 32px;
 }
 
-/* ============================================================
-   TOGGLE SWITCH
-   ============================================================ */
+
 .toggle-switch {
   position: relative;
   width: 44px;
@@ -525,9 +509,7 @@ select.input {
   color: var(--accent-dim);
 }
 
-/* ============================================================
-   BATTERY GAUGE
-   ============================================================ */
+
 .battery-ring {
   position: relative;
   width: 120px;
@@ -578,9 +560,7 @@ select.input {
   margin-top: 2px;
 }
 
-/* ============================================================
-   STAT BAR
-   ============================================================ */
+
 .stat-bar-outer {
   width: 100%;
   height: 6px;
@@ -607,9 +587,7 @@ select.input {
   margin-bottom: 6px;
 }
 
-/* ============================================================
-   PHONE MIRROR FRAME
-   ============================================================ */
+
 .phone-frame {
   position: relative;
   width: 280px;
@@ -662,9 +640,7 @@ select.input {
   justify-content: center;
 }
 
-/* ============================================================
-   PASSCODE MODAL
-   ============================================================ */
+
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -777,9 +753,7 @@ select.input {
   font-weight: 700;
 }
 
-/* ============================================================
-   CONSOLE LOG
-   ============================================================ */
+
 .console {
   background: #05060a;
   border: 1px solid var(--border);
@@ -809,9 +783,7 @@ select.input {
 .console .log-error { color: var(--red); }
 .console .log-info { color: var(--accent); }
 
-/* ============================================================
-   TOAST NOTIFICATION
-   ============================================================ */
+
 .toast-container {
   position: fixed;
   top: 20px;
@@ -846,9 +818,7 @@ select.input {
   to { transform: translateX(0); opacity: 1; }
 }
 
-/* ============================================================
-   STAT CARDS
-   ============================================================ */
+
 .stat-card {
   display: flex;
   flex-direction: column;
@@ -866,9 +836,7 @@ select.input {
   color: var(--text-secondary);
 }
 
-/* ============================================================
-   FILE EXPLORER
-   ============================================================ */
+
 .file-table {
   width: 100%;
   border-collapse: collapse;
@@ -923,9 +891,7 @@ select.input {
   color: var(--accent);
 }
 
-/* ============================================================
-   APP LAUNCHER GRID
-   ============================================================ */
+
 .app-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
@@ -965,9 +931,7 @@ select.input {
   line-height: 1.2;
 }
 
-/* ============================================================
-   MEDIA TRANSPORT
-   ============================================================ */
+
 .media-transport {
   display: flex;
   align-items: center;
@@ -993,9 +957,7 @@ select.input {
   box-shadow: 0 0 24px rgba(0,229,255,0.4);
 }
 
-/* ============================================================
-   RESPONSIVE
-   ============================================================ */
+
 @media (max-width: 1024px) {
   .sidebar {
     width: 60px;
@@ -1043,9 +1005,7 @@ select.input {
   }
 }
 
-/* ============================================================
-   SLIDER
-   ============================================================ */
+
 .slider-row {
   display: flex;
   align-items: center;
@@ -1101,9 +1061,7 @@ input[type="range"]::-webkit-slider-thumb {
   font-weight: 600;
 }
 
-/* ============================================================
-   LOADING SPINNER
-   ============================================================ */
+
 .spinner {
   width: 20px;
   height: 20px;

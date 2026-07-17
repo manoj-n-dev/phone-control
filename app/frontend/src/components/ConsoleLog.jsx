@@ -1,7 +1,7 @@
 import React, { useRef, useEffect } from 'react';
-import { Terminal } from 'lucide-react';
+import { Terminal, Trash2 } from 'lucide-react';
 
-export default function ConsoleLog({ logs }) {
+export default function ConsoleLog({ logs, onClearLogs }) {
   const containerRef = useRef(null);
 
   useEffect(() => {
@@ -12,8 +12,20 @@ export default function ConsoleLog({ logs }) {
 
   return (
     <div>
-      <h2 className="section-title">
-        <Terminal /> Console/Activity Log
+      <h2 className="section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Terminal /> Console/Activity Log
+        </span>
+        {logs.length > 0 && onClearLogs && (
+          <button
+            className="btn btn-sm btn-danger"
+            onClick={onClearLogs}
+            title="Clear all logs"
+            style={{ fontSize: 12 }}
+          >
+            <Trash2 size={14} /> Clear
+          </button>
+        )}
       </h2>
 
       <div className="card">

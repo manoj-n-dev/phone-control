@@ -47,9 +47,7 @@ export default function PhoneMirror({ connected, setConnected, deviceInfo, setDe
         setMirrorImage(`data:image/png;base64,${res.image}`);
       }
     } catch (e) {
-      // Silently fail on mirror refresh
     }
-    // Schedule next frame as fast as possible
     if (mirrorActiveRef.current) {
       setTimeout(fetchMirrorLoop, 100);
     }
@@ -77,7 +75,6 @@ export default function PhoneMirror({ connected, setConnected, deviceInfo, setDe
   const handleKeyDown = async (e) => {
     if (!connected) return;
     const key = e.key;
-    // Don't prevent default for tab, etc unless we want to trap focus
     try {
       await fetch('/api/keyboard', {
         method: 'POST',
@@ -85,7 +82,6 @@ export default function PhoneMirror({ connected, setConnected, deviceInfo, setDe
         body: JSON.stringify({ key, text: key.length === 1 ? key : '' })
       });
     } catch(err) {
-      // ignore
     }
   };
 
@@ -100,14 +96,12 @@ export default function PhoneMirror({ connected, setConnected, deviceInfo, setDe
     const clickX = e.clientX - rect.left;
     const clickY = e.clientY - rect.top;
 
-    // Translate to device coordinates
     const deviceX = Math.round((clickX / displayWidth) * imgWidth);
     const deviceY = Math.round((clickY / displayHeight) * imgHeight);
 
     try {
       await Api.tap(deviceX, deviceY);
       addLog(`Tapped at (${deviceX}, ${deviceY})`, 'info');
-      // If mirror is paused, fetch one frame to see result
       if (!mirrorActiveRef.current) {
         const res = await Api.mirror();
         if (res.success && res.image) setMirrorImage(`data:image/png;base64,${res.image}`);
@@ -124,7 +118,6 @@ export default function PhoneMirror({ connected, setConnected, deviceInfo, setDe
       </h2>
 
       <div style={{ display: 'flex', gap: '24px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-        {/* Phone Frame */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           <div 
             className="phone-frame" 
@@ -164,7 +157,6 @@ export default function PhoneMirror({ connected, setConnected, deviceInfo, setDe
           </div>
         </div>
 
-        {/* Device Info Card */}
         {connected && deviceInfo && (
           <div className="card" style={{ flex: 1, minWidth: 280 }}>
             <div className="card-body">

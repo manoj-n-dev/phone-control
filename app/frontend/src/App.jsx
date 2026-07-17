@@ -48,7 +48,6 @@ export default function App() {
       />
 
       <main className="main-content">
-        {/* Connection */}
         <section id="section-mirror" className="section">
           <PhoneMirror
             connected={connected}
@@ -61,68 +60,55 @@ export default function App() {
           />
         </section>
 
-        {/* System Stats */}
         <section id="section-system" className="section">
           <SystemStats connected={connected} addLog={addLog} addToast={addToast} />
         </section>
 
-        {/* Quick Controls */}
         <section id="section-controls" className="section">
-          <QuickControls connected={connected} addLog={addLog} addToast={addToast} />
+          <QuickControls connected={connected} addLog={addLog} addToast={addToast} onUnlockRequest={() => setShowPasscode(true)} />
         </section>
 
-        {/* App Launcher */}
         <section id="section-apps" className="section">
           <AppLauncher connected={connected} addLog={addLog} addToast={addToast} />
         </section>
 
-        {/* Communication */}
         <section id="section-comms" className="section">
           <Communication connected={connected} addLog={addLog} addToast={addToast} />
         </section>
 
-        {/* Media */}
         <section id="section-media" className="section">
           <MediaControls connected={connected} addLog={addLog} addToast={addToast} />
         </section>
 
-        {/* Settings & Toggles */}
         <section id="section-settings" className="section">
           <SettingsToggles connected={connected} addLog={addLog} addToast={addToast} />
         </section>
 
-        {/* File Explorer */}
         <section id="section-files" className="section">
           <FileExplorer connected={connected} addLog={addLog} addToast={addToast} />
         </section>
 
-        {/* Notifications */}
         <section id="section-notifications" className="section">
           <NotificationsPanel connected={connected} addLog={addLog} addToast={addToast} />
         </section>
 
-        {/* Camera */}
         <section id="section-camera" className="section">
           <CameraModule connected={connected} addLog={addLog} addToast={addToast} />
         </section>
 
-        {/* Automation */}
         <section id="section-automation" className="section">
           <Automation connected={connected} addLog={addLog} addToast={addToast} />
         </section>
 
-        {/* Natural Command */}
         <section id="section-command" className="section">
           <NaturalCommand connected={connected} addLog={addLog} addToast={addToast} />
         </section>
 
-        {/* Console */}
         <section id="section-console" className="section">
-          <ConsoleLog logs={logs} />
+          <ConsoleLog logs={logs} onClearLogs={() => setLogs([])} />
         </section>
       </main>
 
-      {/* Passcode Modal */}
       {showPasscode && (
         <PasscodeModal
           onClose={() => setShowPasscode(false)}

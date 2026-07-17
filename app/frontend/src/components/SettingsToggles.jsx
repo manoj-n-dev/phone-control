@@ -74,7 +74,6 @@ export default function SettingsToggles({ connected, addLog, addToast }) {
       </h2>
 
       <div className="card-grid-2">
-        {/* Toggle switches */}
         <div className="card">
           <div className="card-body">
             {TOGGLES.map(t => {
@@ -99,7 +98,6 @@ export default function SettingsToggles({ connected, addLog, addToast }) {
           </div>
         </div>
 
-        {/* Sliders and Modes */}
         <div className="card">
           <div className="card-body">
             <div className="slider-row">

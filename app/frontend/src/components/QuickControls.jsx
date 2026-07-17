@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { Api } from '../api';
 
-export default function QuickControls({ connected, addLog, addToast }) {
+export default function QuickControls({ connected, addLog, addToast, onUnlockRequest }) {
   const [screenshotImg, setScreenshotImg] = useState(null);
 
   const sendKey = async (key) => {
@@ -25,7 +25,14 @@ export default function QuickControls({ connected, addLog, addToast }) {
     try {
       const res = await Api.screen(action);
       addLog(`Screen ${action}: ${res.message}`, res.success ? 'success' : 'error');
-      if (res.success) addToast(`Screen ${action}`, 'success');
+      if (res.success) {
+        addToast(`Screen ${action}`, 'success');
+        if (action === 'on' && onUnlockRequest) {
+          setTimeout(() => {
+            onUnlockRequest();
+          }, 300);
+        }
+      }
     } catch (e) {
       addLog('Screen error: ' + e.message, 'error');
     }
@@ -70,7 +77,6 @@ export default function QuickControls({ connected, addLog, addToast }) {
       </h2>
 
       <div className="card-grid">
-        {/* Power Controls */}
         <div className="card">
           <div className="card-body">
             <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Power / Screen</div>
@@ -85,7 +91,6 @@ export default function QuickControls({ connected, addLog, addToast }) {
           </div>
         </div>
 
-        {/* Navigation Keys */}
         <div className="card">
           <div className="card-body">
             <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Navigation</div>
@@ -106,7 +111,6 @@ export default function QuickControls({ connected, addLog, addToast }) {
           </div>
         </div>
 
-        {/* Volume Controls */}
         <div className="card">
           <div className="card-body">
             <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Volume</div>
@@ -124,7 +128,6 @@ export default function QuickControls({ connected, addLog, addToast }) {
           </div>
         </div>
 
-        {/* Screenshot */}
         <div className="card">
           <div className="card-body">
             <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Screenshot</div>

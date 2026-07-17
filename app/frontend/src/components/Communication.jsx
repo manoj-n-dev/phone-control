@@ -80,7 +80,6 @@ export default function Communication({ connected, addLog, addToast }) {
       </h2>
 
       <div className="card-grid-2">
-        {/* Phone Calls */}
         <div className="card">
           <div className="card-body">
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
@@ -106,7 +105,6 @@ export default function Communication({ connected, addLog, addToast }) {
           </div>
         </div>
 
-        {/* SMS */}
         <div className="card">
           <div className="card-body">
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
@@ -123,7 +121,6 @@ export default function Communication({ connected, addLog, addToast }) {
           </div>
         </div>
 
-        {/* WhatsApp */}
         <div className="card">
           <div className="card-body">
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
@@ -144,7 +141,6 @@ export default function Communication({ connected, addLog, addToast }) {
           </div>
         </div>
 
-        {/* Email */}
         <div className="card">
           <div className="card-body">
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>

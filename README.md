@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-1.0-ff1a1a?style=for-the-badge" alt="Version 1.0"/>
+  <img src="https://img.shields.io/badge/Version-1.1-ff1a1a?style=for-the-badge" alt="Version 1.1"/>
   <img src="https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python"/>
   <img src="https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react&logoColor=black" alt="React"/>
   <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20Android-0078D6?style=for-the-badge&logo=windows&logoColor=white" alt="Platform"/>
@@ -164,8 +164,9 @@ phone-control/
 
 ## 🙏 Credits & Acknowledgments
 
-### Developer
-**Manoj Royal** — Developer & Creator of Phone Control
+### Developers
+- **Manoj Royal** — Co-Developer & Creator
+- **Hari Kishore** — Co-Developer
 
 ---
 
@@ -178,5 +179,5 @@ This project is licensed under the MIT License.
 <p align="center">
   <b>Phone Control v1.0</b>
   <br/>
-  <i>Built with ❤️ by Manoj Royal</i>
+  <i>Built with ❤️ by Manoj Royal & Hari Kishore</i>
 </p>

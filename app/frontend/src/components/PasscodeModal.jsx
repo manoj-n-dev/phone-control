@@ -75,18 +75,84 @@ export default function PasscodeModal({ onClose, addLog, addToast }) {
         )}
 
         {activeTab === 'pattern' && (
-          <div style={{ textAlign: 'center', padding: '20px 0' }}>
-            <div className="passcode-subtitle">Pattern bypass via ADB is experimental.</div>
-            <input
-              className="input"
-              type="password"
-              placeholder="Enter numerical dot sequence (1-9)"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-              style={{ textAlign: 'center', marginTop: 16 }}
-            />
-            <button className="btn btn-accent" style={{ width: '100%', marginTop: 16 }} onClick={handleSubmit}>Send Pattern</button>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px 0' }}>
+            <div className="passcode-subtitle" style={{ marginBottom: 12 }}>Draw Pattern (Click dots in sequence)</div>
+            
+            <div style={{ position: 'relative', width: 240, height: 240, background: 'var(--bg-input)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)', padding: 20 }}>
+              <svg width="100%" height="100%" viewBox="0 0 200 200" style={{ overflow: 'visible' }}>
+                {(() => {
+                  const points = [];
+                  const path = value ? (Array.isArray(value) ? value : value.split(',').filter(Boolean).map(Number)) : [];
+                  path.forEach(dotId => {
+                    const idx = dotId - 1;
+                    const row = Math.floor(idx / 3);
+                    const col = idx % 3;
+                    const x = 30 + col * 70;
+                    const y = 30 + row * 70;
+                    points.push(`${x},${y}`);
+                  });
+                  if (points.length > 0) {
+                    return (
+                      <polyline
+                        fill="none"
+                        stroke="var(--accent)"
+                        strokeWidth="4"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        points={points.join(' ')}
+                        style={{ filter: 'drop-shadow(0 0 4px var(--accent))' }}
+                      />
+                    );
+                  }
+                  return null;
+                })()}
+
+                {Array.from({ length: 9 }).map((_, i) => {
+                  const dotId = i + 1;
+                  const row = Math.floor(i / 3);
+                  const col = i % 3;
+                  const cx = 30 + col * 70;
+                  const cy = 30 + row * 70;
+                  const path = value ? (Array.isArray(value) ? value : value.split(',').filter(Boolean).map(Number)) : [];
+                  const isSelected = path.includes(dotId);
+
+                  return (
+                    <g key={dotId} style={{ cursor: 'pointer' }} onClick={() => {
+                      if (path[path.length - 1] === dotId) return;
+                      const newPath = [...path, dotId];
+                      setValue(newPath.join(','));
+                    }}>
+                      <circle cx={cx} cy={cy} r="25" fill="transparent" />
+                      <circle
+                        cx={cx}
+                        cy={cy}
+                        r="12"
+                        fill={isSelected ? 'var(--accent-glow)' : 'transparent'}
+                        stroke={isSelected ? 'var(--accent)' : 'var(--border)'}
+                        strokeWidth="2"
+                        style={{ transition: 'all 0.2s var(--ease)' }}
+                      />
+                      <circle
+                        cx={cx}
+                        cy={cy}
+                        r="5"
+                        fill={isSelected ? 'var(--accent)' : 'var(--text-muted)'}
+                        style={{ transition: 'all 0.2s var(--ease)' }}
+                      />
+                    </g>
+                  );
+                })}
+              </svg>
+            </div>
+
+            <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-secondary)' }}>
+              Sequence: <span style={{ color: 'var(--accent)', fontWeight: 600 }}>{value ? value.replace(/,/g, ' ➔ ') : 'None'}</span>
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, width: '100%', marginTop: 16 }}>
+              <button className="btn" style={{ flex: 1 }} onClick={() => setValue('')}>Reset</button>
+              <button className="btn btn-accent" style={{ flex: 1 }} onClick={handleSubmit} disabled={!value}>Unlock</button>
+            </div>
           </div>
         )}
 

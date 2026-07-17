@@ -56,6 +56,9 @@ export default function Sidebar({ connected, deviceInfo, activeSection, onNaviga
           );
         })}
       </nav>
+      <div className="sidebar-footer" style={{ padding: '16px 20px', borderTop: '1px solid var(--border)', fontSize: '11px', color: 'var(--text-muted)', textAlign: 'center' }}>
+        Built by Manoj & Hari Kishore
+      </div>
     </aside>
   );
 }

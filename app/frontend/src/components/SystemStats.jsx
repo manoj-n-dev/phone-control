@@ -38,6 +38,52 @@ function BatteryGauge({ level, status, tempC }) {
   );
 }
 
+function MemoryGauge({ used, total, percent }) {
+  const radius = 50;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (percent / 100) * circumference;
+  const barClass = percent > 85 ? 'low' : percent > 65 ? 'medium' : 'high';
+
+  const formatSize = (mb) => {
+    if (mb > 1024) {
+      return `${(mb / 1024).toFixed(1)} GB`;
+    }
+    return `${mb.toFixed(0)} MB`;
+  };
+
+  return (
+    <div className="card">
+      <div className="card-body" style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+        <div className="battery-ring">
+          <svg width="120" height="120" viewBox="0 0 120 120">
+            <circle className="ring-bg" cx="60" cy="60" r={radius} />
+            <circle
+              className={`ring-fill ${barClass}`}
+              cx="60" cy="60" r={radius}
+              strokeDasharray={circumference}
+              strokeDashoffset={offset}
+            />
+          </svg>
+          <div className="battery-percent">
+            <span className="value">{percent.toFixed(0)}</span>
+            <span className="unit">%</span>
+          </div>
+        </div>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <MemoryStick size={16} style={{ color: 'var(--accent)' }} /> Memory (RAM)
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.8 }}>
+            <div>Used: <span style={{ color: 'var(--text-primary)' }}>{formatSize(used)}</span></div>
+            <div>Free: <span style={{ color: 'var(--text-primary)' }}>{formatSize(total - used)}</span></div>
+            <div>Total: <span style={{ color: 'var(--text-primary)' }}>{formatSize(total)}</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function StatBar({ label, used, total, unit = 'MB', icon: Icon }) {
   const percent = total > 0 ? Math.round((used / total) * 100) : 0;
   const barClass = percent > 85 ? 'danger' : percent > 65 ? 'warn' : '';
@@ -118,24 +164,20 @@ export default function SystemStats({ connected, addLog, addToast }) {
       </div>
 
       <div className="card-grid">
-        {/* Battery */}
         <BatteryGauge
           level={battery?.level ?? 0}
           status={battery?.status === 2 ? 'Charging' : battery?.status === 3 ? 'Discharging' : battery?.status === 5 ? 'Full' : 'Unknown'}
           tempC={battery?.temperature_c ?? temperature?.temperature_c ?? 0}
         />
 
-        {/* Memory */}
         {memory && (
-          <StatBar
-            label="Memory (RAM)"
+          <MemoryGauge
             used={memory.used_mb}
             total={memory.total_mb}
-            icon={MemoryStick}
+            percent={memory.percent_used}
           />
         )}
 
-        {/* CPU */}
         <div className="card">
           <div className="card-body">
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
@@ -149,7 +191,6 @@ export default function SystemStats({ connected, addLog, addToast }) {
           </div>
         </div>
 
-        {/* Temperature */}
         <div className="card">
           <div className="card-body">
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
@@ -162,7 +203,6 @@ export default function SystemStats({ connected, addLog, addToast }) {
           </div>
         </div>
 
-        {/* Network */}
         <div className="card">
           <div className="card-body">
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
@@ -181,30 +221,40 @@ export default function SystemStats({ connected, addLog, addToast }) {
           </div>
         </div>
 
-        {/* Storage */}
         {storage?.length > 0 && (
-          <div className="card">
+          <div className="card" style={{ gridColumn: 'span 2' }}>
             <div className="card-body">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
                 <HardDrive size={18} style={{ color: 'var(--accent-dim)' }} />
-                <span style={{ fontSize: 14, fontWeight: 600 }}>Storage</span>
+                <span style={{ fontSize: 14, fontWeight: 600 }}>Storage Devices</span>
               </div>
-              {storage.slice(0, 3).map((s, i) => (
-                <div key={i} style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <span>{s.mounted_on}</span>
-                    <span>{s.use_percent} used</span>
-                  </div>
-                  <div className="stat-bar-outer">
-                    <div className="stat-bar-fill" style={{ width: s.use_percent }} />
-                  </div>
-                </div>
-              ))}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16 }}>
+                {storage.map((s, i) => {
+                  const percentNum = parseInt(s.use_percent) || 0;
+                  const barClass = percentNum > 90 ? 'danger' : percentNum > 75 ? 'warn' : '';
+                  return (
+                    <div key={i} style={{ padding: '14px', background: 'rgba(255,255,255,0.02)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent)' }}>{s.mounted_on}</span>
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{s.used} / {s.size}</span>
+                        </div>
+                        <div className="stat-bar-outer" style={{ height: 8 }}>
+                          <div className={`stat-bar-fill ${barClass}`} style={{ width: s.use_percent, height: '100%' }} />
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-secondary)', marginTop: 8 }}>
+                        <span>{s.available} free</span>
+                        <span>{s.use_percent} used</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}
 
-        {/* Device details */}
         {devInfo && (
           <div className="card">
             <div className="card-body">
